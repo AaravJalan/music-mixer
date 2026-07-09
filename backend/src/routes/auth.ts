@@ -24,6 +24,20 @@ function safeRedirect(path: string | undefined): string {
   return path;
 }
 
+function getRedirectUri(req: Request): string {
+  const forwardedHost = req.headers['x-forwarded-host'];
+  if (forwardedHost) {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    return `${proto}://${forwardedHost}/api/auth/callback`;
+  }
+
+  const host = req.headers.host || '';
+  if (host.includes('lambda-url') || host.includes('amazonaws.com')) {
+    return `https://${host}/api/auth/callback`;
+  }
+  return env.spotify.redirectUri();
+}
+
 function authErrorRedirect(code: string, redirect?: string, origin?: string): string {
   const base = `${origin || env.frontendUrl}/?auth_error=${encodeURIComponent(code)}`;
   if (redirect && redirect !== '/') {
@@ -55,7 +69,8 @@ router.get('/login', async (req: Request, res: Response) => {
   const origin = typeof req.query.origin === 'string' ? req.query.origin : env.frontendUrl;
   const forceConsent = req.query.consent === '1' || req.query.force === '1';
   const state = await createOAuthState(redirect, origin);
-  res.redirect(buildAuthorizeUrl(state, forceConsent));
+  const redirectUri = getRedirectUri(req);
+  res.redirect(buildAuthorizeUrl(state, redirectUri, forceConsent));
 });
 
 router.get('/callback', async (req: Request, res: Response) => {
@@ -79,7 +94,8 @@ router.get('/callback', async (req: Request, res: Response) => {
   const { redirect, origin } = stateEntry;
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    const redirectUri = getRedirectUri(req);
+    const tokens = await exchangeCodeForTokens(code, redirectUri);
     const user = await fetchSpotifyProfile(tokens.access_token);
 
     let refreshToken = tokens.refresh_token ?? (await getStoredRefreshToken(user.id));

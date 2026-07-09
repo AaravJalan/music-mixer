@@ -16,7 +16,7 @@ interface SpotifyUserResponse {
   images: { url: string }[];
 }
 
-export async function exchangeCodeForTokens(code: string): Promise<SpotifyTokenResponse> {
+export async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<SpotifyTokenResponse> {
   const credentials = Buffer.from(
     `${env.spotify.clientId()}:${env.spotify.clientSecret()}`,
   ).toString('base64');
@@ -24,7 +24,7 @@ export async function exchangeCodeForTokens(code: string): Promise<SpotifyTokenR
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: env.spotify.redirectUri(),
+    redirect_uri: redirectUri,
   });
 
   const res = await fetchWithRetry(SPOTIFY_TOKEN_URL, {
@@ -93,11 +93,11 @@ export async function fetchSpotifyProfile(accessToken: string): Promise<UserProf
   };
 }
 
-export function buildAuthorizeUrl(state: string, showDialog = false): string {
+export function buildAuthorizeUrl(state: string, redirectUri: string, showDialog = false): string {
   const params = new URLSearchParams({
     client_id: env.spotify.clientId(),
     response_type: 'code',
-    redirect_uri: env.spotify.redirectUri(),
+    redirect_uri: redirectUri,
     scope: 'user-read-private user-read-email user-top-read playlist-modify-private',
     state,
   });
