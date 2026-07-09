@@ -18,9 +18,10 @@ router.post('/export', requireAuth, async (req: Request, res: Response) => {
     public?: boolean;
   };
 
-  const result = getCollisionResult(collisionId)
-    ?? getCollisionSnapshot(authReq.user.id, collisionId)?.result
-    ?? null;
+  const liveResult = await getCollisionResult(collisionId);
+  const snapshot = liveResult ? null : await getCollisionSnapshot(authReq.user.id, collisionId);
+  const result = liveResult ?? snapshot?.result ?? null;
+
   if (!result) {
     res.status(404).json({ error: 'Collision result not found' });
     return;

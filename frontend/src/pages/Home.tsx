@@ -118,13 +118,12 @@ export function Home({ user }: HomeProps) {
           </h1>
           <p className="text-xl text-white/60 mb-2">Spotify Taste Collision Engine</p>
           <p className="text-white/40 mb-8 max-w-md mx-auto">
-            Collide tastes in 6-dimensional audio feature space. Blend profiles, share playlists.
+            Blend Spotify taste profiles, explore your listening habits, and unlock your personal music dashboard.
           </p>
           {authError && <AuthErrorBanner errorCode={authError} />}
           <Button variant="spotify" size="lg" onClick={() => api.login('/')}>
             Connect with Spotify
           </Button>
-          <p className="text-xs text-white/30 mt-4">Use http://127.0.0.1:5173 for OAuth</p>
         </motion.div>
       </div>
     );

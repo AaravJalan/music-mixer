@@ -36,6 +36,10 @@ export const env = {
     clientSecret: () => required('SPOTIFY_CLIENT_SECRET'),
     redirectUri: () => required('SPOTIFY_REDIRECT_URI'),
   },
+  redis: {
+    url: () => required('UPSTASH_REDIS_REST_URL'),
+    token: () => required('UPSTASH_REDIS_REST_TOKEN'),
+  },
   isProd: optional('NODE_ENV', 'development') === 'production',
 };
 
@@ -44,5 +48,12 @@ export function isSpotifyConfigured(): boolean {
     process.env.SPOTIFY_CLIENT_ID &&
     process.env.SPOTIFY_CLIENT_SECRET &&
     process.env.SPOTIFY_REDIRECT_URI,
+  );
+}
+
+export function isRedisConfigured(): boolean {
+  return Boolean(
+    process.env.UPSTASH_REDIS_REST_URL &&
+    process.env.UPSTASH_REDIS_REST_TOKEN,
   );
 }

@@ -105,14 +105,14 @@ async function fetchArtistGenres(
   sessionId: string,
   artist: SpotifyArtist,
 ): Promise<string[]> {
-  const cached = getCachedArtistGenres(artist.id);
+  const cached = await getCachedArtistGenres(artist.id);
   if (cached && cached.length > 0) return cached;
 
   try {
     const detail = await spotifyFetch<SpotifyArtist>(sessionId, `/artists/${artist.id}`);
     const apiGenres = safeGenres(detail.genres);
     if (apiGenres.length > 0) {
-      setCachedArtistGenres(artist.id, artist.name, apiGenres);
+      await setCachedArtistGenres(artist.id, artist.name, apiGenres);
       return apiGenres;
     }
   } catch {
@@ -120,7 +120,7 @@ async function fetchArtistGenres(
   }
   const inferred = inferGenresFromArtistName(artist.name);
   if (inferred.length > 0) {
-    setCachedArtistGenres(artist.id, artist.name, inferred);
+    await setCachedArtistGenres(artist.id, artist.name, inferred);
   }
   return inferred;
 }

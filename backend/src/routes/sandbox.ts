@@ -44,7 +44,7 @@ router.post('/collision', requireAuth, async (req: Request, res: Response) => {
     });
     const latency = performance.now() - start;
     recordRecommendationLatency(latency);
-    recordCollisionHistory(authReq.user.id, result, 'sandbox', {
+    await recordCollisionHistory(authReq.user.id, result, 'sandbox', {
       participantWeights: result.participantWeights,
       participantTimeRanges: Array(result.participantWeights.length).fill('medium_term') as import('@music-mixer/shared').TasteTimeRange[],
       playlistGenerationMode: body.playlistGenerationMode ?? 'equal_share',

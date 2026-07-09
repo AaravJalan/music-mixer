@@ -20,7 +20,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const friendIds = getFriends(userId);
   const realFriendsRaw = await Promise.all(
     friendIds.map(async (f) => {
-      const profile = getCachedProfile(f.userId) ?? (await resolveFriendProfile(f.userId));
+      const profile = (await getCachedProfile(f.userId)) ?? (await resolveFriendProfile(f.userId));
       if (!profile) return null;
       return { user: profile, addedAt: f.addedAt, isGhost: isGhostUserId(f.userId) };
     })
@@ -32,7 +32,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const ghosts = defaultGhosts.filter((g) => !ghostIds.has(g.user.id));
   const friends = [...ghosts, ...realFriends.filter((f) => !f.isGhost)];
 
-  const pendingCollisions = getPendingCollisions(userId);
+  const pendingCollisions = await getPendingCollisions(userId);
   res.json({ friends, pendingCollisions });
 });
 

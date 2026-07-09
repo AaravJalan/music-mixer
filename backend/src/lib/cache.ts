@@ -1,12 +1,18 @@
 import type { DashboardResponse, TasteTimeRange } from '@music-mixer/shared';
-import { loadJsonFile, saveJsonFile } from './persist';
+import { redis } from '../services/redis/client';
 
-const ARTIST_CACHE_FILE = 'artist-cache.json';
-const ARTIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// ─── TTLs (seconds) ──────────────────────────────────────────────────────────
+const ARTIST_GENRES_TTL = 30 * 24 * 60 * 60; // 30 days
+const DASHBOARD_TTL = 24 * 60 * 60;           // 24 hours
 
-const DASHBOARD_CACHE_FILE = 'dashboard-cache.json';
-const DASHBOARD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const DASHBOARD_CACHE_VERSION = 'v5';
+
+// ─── Key helpers ──────────────────────────────────────────────────────────────
+const artistGenresKey = (artistId: string) => `artist_genres:${artistId}`;
+const dashboardKey = (userId: string, term: TasteTimeRange) =>
+  `dashboard:${userId}:${term}:${DASHBOARD_CACHE_VERSION}`;
+
+// ─── Artist Genres Cache ──────────────────────────────────────────────────────
 
 interface ArtistCacheEntry {
   genres: string[];
@@ -14,54 +20,48 @@ interface ArtistCacheEntry {
   cachedAt: string;
 }
 
+export async function getCachedArtistGenres(artistId: string): Promise<string[] | null> {
+  const raw = await redis.get<string>(artistGenresKey(artistId));
+  if (!raw) return null;
+  try {
+    const entry: ArtistCacheEntry =
+      typeof raw === 'string' ? JSON.parse(raw) : (raw as ArtistCacheEntry);
+    return entry.genres ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedArtistGenres(artistId: string, name: string, genres: string[]): Promise<void> {
+  const entry: ArtistCacheEntry = { genres, name, cachedAt: new Date().toISOString() };
+  await redis.set(artistGenresKey(artistId), JSON.stringify(entry), { ex: ARTIST_GENRES_TTL });
+}
+
+// ─── Dashboard Cache ──────────────────────────────────────────────────────────
+
 interface DashboardCacheEntry {
   data: DashboardResponse;
   cachedAt: string;
 }
 
-const artistMemory = new Map<string, ArtistCacheEntry>(
-  Object.entries(loadJsonFile<Record<string, ArtistCacheEntry>>(ARTIST_CACHE_FILE, {})),
-);
-
-const dashboardMemory = new Map<string, DashboardCacheEntry>(
-  Object.entries(loadJsonFile<Record<string, DashboardCacheEntry>>(DASHBOARD_CACHE_FILE, {})),
-);
-
-function isFresh(cachedAt: string, maxAgeMs: number): boolean {
-  return Date.now() - new Date(cachedAt).getTime() < maxAgeMs;
+export async function getCachedDashboard(userId: string, term: TasteTimeRange): Promise<DashboardResponse | null> {
+  const raw = await redis.get<string>(dashboardKey(userId, term));
+  if (!raw) return null;
+  try {
+    const entry: DashboardCacheEntry =
+      typeof raw === 'string' ? JSON.parse(raw) : (raw as DashboardCacheEntry);
+    return { ...entry.data, cachedAt: entry.cachedAt };
+  } catch {
+    return null;
+  }
 }
 
-function persistArtistCache(): void {
-  saveJsonFile(ARTIST_CACHE_FILE, Object.fromEntries(artistMemory));
-}
-
-function persistDashboardCache(): void {
-  saveJsonFile(DASHBOARD_CACHE_FILE, Object.fromEntries(dashboardMemory));
-}
-
-function dashboardCacheKey(userId: string, term: TasteTimeRange): string {
-  return `${userId}:${term}:${DASHBOARD_CACHE_VERSION}`;
-}
-
-export function getCachedArtistGenres(artistId: string): string[] | null {
-  const entry = artistMemory.get(artistId);
-  if (!entry || !isFresh(entry.cachedAt, ARTIST_MAX_AGE_MS)) return null;
-  return entry.genres;
-}
-
-export function setCachedArtistGenres(artistId: string, name: string, genres: string[]): void {
-  artistMemory.set(artistId, { genres, name, cachedAt: new Date().toISOString() });
-  persistArtistCache();
-}
-
-export function getCachedDashboard(userId: string, term: TasteTimeRange): DashboardResponse | null {
-  const entry = dashboardMemory.get(dashboardCacheKey(userId, term));
-  if (!entry || !isFresh(entry.cachedAt, DASHBOARD_MAX_AGE_MS)) return null;
-  return { ...entry.data, cachedAt: entry.cachedAt };
-}
-
-export function setCachedDashboard(userId: string, term: TasteTimeRange, data: DashboardResponse): void {
+export async function setCachedDashboard(
+  userId: string,
+  term: TasteTimeRange,
+  data: DashboardResponse,
+): Promise<void> {
   const cachedAt = new Date().toISOString();
-  dashboardMemory.set(dashboardCacheKey(userId, term), { data: { ...data, cachedAt }, cachedAt });
-  persistDashboardCache();
+  const entry: DashboardCacheEntry = { data: { ...data, cachedAt }, cachedAt };
+  await redis.set(dashboardKey(userId, term), JSON.stringify(entry), { ex: DASHBOARD_TTL });
 }

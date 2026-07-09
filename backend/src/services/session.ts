@@ -1,7 +1,7 @@
 import type { UserProfile } from '@music-mixer/shared';
 import { v4 as uuidv4 } from 'uuid';
 import { refreshAccessToken } from '../spotify/auth';
-import { loadJsonFile, saveJsonFile } from '../lib/persist';
+import { redis } from './redis/client';
 
 export interface SessionData {
   user: UserProfile;
@@ -12,119 +12,105 @@ export interface SessionData {
 
 interface OAuthStateEntry {
   redirect: string;
-  createdAt: number;
 }
 
-type SessionsStore = Record<string, SessionData>;
-type OAuthStore = Record<string, OAuthStateEntry>;
-type RefreshTokenStore = Record<string, string>;
+// ─── Key helpers ──────────────────────────────────────────────────────────────
+const sessionKey = (id: string) => `session:${id}`;
+const oauthStateKey = (state: string) => `oauth_state:${state}`;
+const refreshTokenKey = (userId: string) => `refresh_token:${userId}`;
+const profileKey = (userId: string) => `profile:${userId}`;
 
-const sessions = new Map<string, SessionData>(
-  Object.entries(loadJsonFile<SessionsStore>('sessions.json', {})),
-);
-const oauthStates = new Map<string, OAuthStateEntry>(
-  Object.entries(loadJsonFile<OAuthStore>('oauth-states.json', {})),
-);
-const userRefreshTokens = new Map<string, string>(
-  Object.entries(loadJsonFile<RefreshTokenStore>('refresh-tokens.json', {})),
-);
-const profileCache = new Map<string, UserProfile>(
-  Object.entries(loadJsonFile<Record<string, UserProfile>>('profiles.json', {})),
-);
+// ─── TTLs (seconds) ──────────────────────────────────────────────────────────
+const SESSION_TTL = 604800;   // 7 days
+const OAUTH_STATE_TTL = 900;  // 15 minutes
+const PROFILE_TTL = 604800;   // 7 days
 
-const OAUTH_STATE_TTL_MS = 15 * 60 * 1000;
+// ─── OAuth State ─────────────────────────────────────────────────────────────
 
-function persistSessions(): void {
-  saveJsonFile('sessions.json', Object.fromEntries(sessions));
-}
-
-function persistOAuthStates(): void {
-  saveJsonFile('oauth-states.json', Object.fromEntries(oauthStates));
-}
-
-function persistRefreshTokens(): void {
-  saveJsonFile('refresh-tokens.json', Object.fromEntries(userRefreshTokens));
-}
-
-function persistProfiles(): void {
-  saveJsonFile('profiles.json', Object.fromEntries(profileCache));
-}
-
-function cleanupExpiredStates(): void {
-  const now = Date.now();
-  let changed = false;
-  for (const [state, entry] of oauthStates) {
-    if (now - entry.createdAt > OAUTH_STATE_TTL_MS) {
-      oauthStates.delete(state);
-      changed = true;
-    }
-  }
-  if (changed) persistOAuthStates();
-}
-
-export function createOAuthState(redirect: string): string {
-  cleanupExpiredStates();
+export async function createOAuthState(redirect: string): Promise<string> {
   const state = uuidv4();
-  oauthStates.set(state, { redirect, createdAt: Date.now() });
-  persistOAuthStates();
+  const entry: OAuthStateEntry = { redirect };
+  await redis.set(oauthStateKey(state), JSON.stringify(entry), { ex: OAUTH_STATE_TTL });
   return state;
 }
 
-export function consumeOAuthState(state: string): string | null {
-  const entry = oauthStates.get(state);
-  if (!entry) return null;
-  oauthStates.delete(state);
-  persistOAuthStates();
-  if (Date.now() - entry.createdAt > OAUTH_STATE_TTL_MS) return null;
-  return entry.redirect;
+export async function consumeOAuthState(state: string): Promise<string | null> {
+  const raw = await redis.getdel<string>(oauthStateKey(state));
+  if (!raw) return null;
+  try {
+    const entry: OAuthStateEntry = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return entry.redirect ?? null;
+  } catch {
+    return null;
+  }
 }
 
-export function getStoredRefreshToken(userId: string): string | null {
-  return userRefreshTokens.get(userId) ?? null;
+// ─── Refresh Tokens ───────────────────────────────────────────────────────────
+
+export async function getStoredRefreshToken(userId: string): Promise<string | null> {
+  return redis.get<string>(refreshTokenKey(userId));
 }
 
-export function createSession(
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+
+export async function createSession(
   user: UserProfile,
   tokens: { accessToken: string; refreshToken: string; expiresIn: number },
-): string {
+): Promise<string> {
   const sessionId = uuidv4();
-  sessions.set(sessionId, {
+  const data: SessionData = {
     user,
     refreshToken: tokens.refreshToken,
     accessToken: tokens.accessToken,
     accessTokenExpiresAt: Date.now() + tokens.expiresIn * 1000 - 60_000,
-  });
-  userRefreshTokens.set(user.id, tokens.refreshToken);
-  cacheUserProfile({ ...user, platform: 'spotify' });
-  persistSessions();
-  persistRefreshTokens();
+  };
+  await Promise.all([
+    redis.set(sessionKey(sessionId), JSON.stringify(data), { ex: SESSION_TTL }),
+    redis.set(refreshTokenKey(user.id), tokens.refreshToken),
+    cacheUserProfile({ ...user, platform: 'spotify' }),
+  ]);
   return sessionId;
 }
 
-export function getSession(sessionId: string): SessionData | null {
-  return sessions.get(sessionId) ?? null;
+export async function getSession(sessionId: string): Promise<SessionData | null> {
+  const raw = await redis.get<string>(sessionKey(sessionId));
+  if (!raw) return null;
+  try {
+    return typeof raw === 'string' ? (JSON.parse(raw) as SessionData) : (raw as SessionData);
+  } catch {
+    return null;
+  }
 }
 
-export function getSessionUser(sessionId: string): UserProfile | null {
-  return sessions.get(sessionId)?.user ?? null;
+export async function getSessionUser(sessionId: string): Promise<UserProfile | null> {
+  const session = await getSession(sessionId);
+  return session?.user ?? null;
 }
 
-export function destroySession(sessionId: string): void {
-  sessions.delete(sessionId);
-  persistSessions();
+export async function destroySession(sessionId: string): Promise<void> {
+  await redis.del(sessionKey(sessionId));
 }
 
-export function cacheUserProfile(user: UserProfile): void {
-  profileCache.set(user.id, { ...user, platform: 'spotify' });
-  persistProfiles();
+// ─── Profile Cache ────────────────────────────────────────────────────────────
+
+export async function cacheUserProfile(user: UserProfile): Promise<void> {
+  await redis.set(profileKey(user.id), JSON.stringify({ ...user, platform: 'spotify' }), { ex: PROFILE_TTL });
 }
 
-export function getCachedProfile(userId: string): UserProfile | null {
-  return profileCache.get(userId) ?? null;
+export async function getCachedProfile(userId: string): Promise<UserProfile | null> {
+  const raw = await redis.get<string>(profileKey(userId));
+  if (!raw) return null;
+  try {
+    return typeof raw === 'string' ? (JSON.parse(raw) as UserProfile) : (raw as UserProfile);
+  } catch {
+    return null;
+  }
 }
+
+// ─── Token Refresh ────────────────────────────────────────────────────────────
 
 export async function getValidAccessToken(sessionId: string): Promise<string | null> {
-  const session = sessions.get(sessionId);
+  const session = await getSession(sessionId);
   if (!session) return null;
 
   if (Date.now() < session.accessTokenExpiresAt) {
@@ -137,14 +123,12 @@ export async function getValidAccessToken(sessionId: string): Promise<string | n
     session.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000 - 60_000;
     if (tokens.refresh_token) {
       session.refreshToken = tokens.refresh_token;
-      userRefreshTokens.set(session.user.id, tokens.refresh_token);
-      persistRefreshTokens();
+      await redis.set(refreshTokenKey(session.user.id), tokens.refresh_token);
     }
-    persistSessions();
+    await redis.set(sessionKey(sessionId), JSON.stringify(session), { ex: SESSION_TTL });
     return session.accessToken;
   } catch {
-    sessions.delete(sessionId);
-    persistSessions();
+    await redis.del(sessionKey(sessionId));
     return null;
   }
 }

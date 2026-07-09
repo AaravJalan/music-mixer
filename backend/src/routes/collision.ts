@@ -71,7 +71,7 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Unknown profile' });
       return;
     }
-    const collision = createGhostCollision(
+    const collision = await createGhostCollision(
       authReq.user,
       authReq.sessionId,
       ghostToUserProfile(ghost),
@@ -83,7 +83,7 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
     return;
   }
 
-  const collision = createCollision(authReq.user, authReq.sessionId, env.frontendUrl, {
+  const collision = await createCollision(authReq.user, authReq.sessionId, env.frontendUrl, {
     mode: body.mode as 'link' | 'friend' | undefined,
     friendId: body.friendId,
     config,
@@ -92,11 +92,11 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
   res.json({ collision });
 });
 
-router.post('/create-solo', requireAuth, (req: Request, res: Response) => {
+router.post('/create-solo', requireAuth, async (req: Request, res: Response) => {
   const authReq = req as Request & { user: import('@music-mixer/shared').UserProfile; sessionId: string };
   const body = req.body as { userAWeight?: number; userBWeight?: number; playlistLength?: number };
 
-  const collision = createSoloCollision(authReq.user, authReq.sessionId, env.frontendUrl, {
+  const collision = await createSoloCollision(authReq.user, authReq.sessionId, env.frontendUrl, {
     userAWeight: body.userAWeight ?? 60,
     userBWeight: body.userBWeight ?? 40,
     participantWeights: [body.userAWeight ?? 60, body.userBWeight ?? 40],
@@ -108,21 +108,21 @@ router.post('/create-solo', requireAuth, (req: Request, res: Response) => {
   res.json({ collision });
 });
 
-router.get('/history', requireAuth, (req: Request, res: Response) => {
+router.get('/history', requireAuth, async (req: Request, res: Response) => {
   const userId = (req as Request & { user: { id: string } }).user.id;
-  res.json({ collisions: getCollisionHistory(userId) });
+  res.json({ collisions: await getCollisionHistory(userId) });
 });
 
-router.delete('/history', requireAuth, (req: Request, res: Response) => {
+router.delete('/history', requireAuth, async (req: Request, res: Response) => {
   const userId = (req as Request & { user: { id: string } }).user.id;
-  const cleared = clearCollisionHistory(userId);
+  const cleared = await clearCollisionHistory(userId);
   res.json({ ok: true, cleared });
 });
 
-router.get('/history/:id', requireAuth, (req: Request, res: Response) => {
+router.get('/history/:id', requireAuth, async (req: Request, res: Response) => {
   const userId = (req as Request & { user: { id: string } }).user.id;
   const id = paramId(req);
-  const snapshot = getCollisionSnapshot(userId, id);
+  const snapshot = await getCollisionSnapshot(userId, id);
   if (!snapshot) {
     res.status(404).json({ error: 'Collision not found' });
     return;
@@ -163,7 +163,7 @@ router.post('/history/:id/rerun', requireAuth, async (req: Request, res: Respons
   }
 });
 
-router.delete('/history/:id', requireAuth, (req: Request, res: Response) => {
+router.delete('/history/:id', requireAuth, async (req: Request, res: Response) => {
   const userId = (req as Request & { user: { id: string } }).user.id;
   const id = paramId(req);
   const completedAt = typeof req.query.completedAt === 'string' ? req.query.completedAt : '';
@@ -173,7 +173,7 @@ router.delete('/history/:id', requireAuth, (req: Request, res: Response) => {
     return;
   }
 
-  const deleted = deleteCollisionHistoryEntry(userId, id, completedAt);
+  const deleted = await deleteCollisionHistoryEntry(userId, id, completedAt);
   if (!deleted) {
     res.status(404).json({ error: 'Collision not found in your history' });
     return;
@@ -182,8 +182,8 @@ router.delete('/history/:id', requireAuth, (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-router.get('/:id', (req: Request, res: Response) => {
-  const stored = getCollision(paramId(req));
+router.get('/:id', async (req: Request, res: Response) => {
+  const stored = await getCollision(paramId(req));
   if (!stored) {
     res.status(404).json({ error: 'Collision not found' });
     return;
@@ -191,8 +191,8 @@ router.get('/:id', (req: Request, res: Response) => {
   res.json({ collision: stored.session });
 });
 
-router.patch('/:id/config', requireAuth, (req: Request, res: Response) => {
-  const config = updateCollisionConfig(paramId(req), req.body);
+router.patch('/:id/config', requireAuth, async (req: Request, res: Response) => {
+  const config = await updateCollisionConfig(paramId(req), req.body);
   if (!config) {
     res.status(404).json({ error: 'Collision not found' });
     return;
@@ -200,9 +200,9 @@ router.patch('/:id/config', requireAuth, (req: Request, res: Response) => {
   res.json({ config });
 });
 
-router.post('/:id/join', requireAuth, (req: Request, res: Response) => {
+router.post('/:id/join', requireAuth, async (req: Request, res: Response) => {
   const authReq = req as Request & { user: import('@music-mixer/shared').UserProfile; sessionId: string };
-  const session = joinCollision(paramId(req), authReq.user, authReq.sessionId);
+  const session = await joinCollision(paramId(req), authReq.user, authReq.sessionId);
   if (!session) {
     res.status(400).json({ error: 'Cannot join this collision' });
     return;
@@ -212,13 +212,13 @@ router.post('/:id/join', requireAuth, (req: Request, res: Response) => {
 
 router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
   const id = paramId(req);
-  const stored = getCollision(id);
+  const stored = await getCollision(id);
   if (!stored || !stored.session.userA || !stored.session.userB) {
     res.status(400).json({ error: 'Both users must be present' });
     return;
   }
 
-  const ghostMode = isGhostCollision(id);
+  const ghostMode = await isGhostCollision(id);
   if (!ghostMode && !stored.userBSessionId) {
     res.status(400).json({ error: 'Both users must be present' });
     return;
@@ -248,7 +248,7 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
       body.userAWeight ?? stored.config.userAWeight,
       body.userBWeight ?? stored.config.userBWeight,
     ];
-    updateCollisionConfig(id, {
+    await updateCollisionConfig(id, {
       userAWeight: weights[0],
       userBWeight: weights[1] ?? stored.config.userBWeight,
       participantWeights: weights,
@@ -260,14 +260,14 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
     });
   }
 
-  const config = getStoredConfig(id)!;
+  const config = (await getStoredConfig(id))!;
 
   if (stored.result) {
     res.json({ result: stored.result, metrics: getMetricsSnapshot(0) });
     return;
   }
 
-  updateCollisionStatus(id, 'ready');
+  await updateCollisionStatus(id, 'ready');
   const start = performance.now();
 
   try {
@@ -305,10 +305,10 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
     const latency = performance.now() - start;
     recordRecommendationLatency(latency);
     const finalResult = { ...result, collisionId: id };
-    setCollisionComplete(id, finalResult);
-    recordCollisionHistory(stored.session.userA.id, finalResult, config.mode, config);
+    await setCollisionComplete(id, finalResult);
+    await recordCollisionHistory(stored.session.userA.id, finalResult, config.mode, config);
     if (!ghostMode && stored.session.userB) {
-      recordCollisionHistory(stored.session.userB.id, finalResult, config.mode, config);
+      await recordCollisionHistory(stored.session.userB.id, finalResult, config.mode, config);
     }
     const metrics = getMetricsSnapshot(latency);
     res.json({ result: finalResult, metrics });
@@ -324,8 +324,8 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id/result', (req: Request, res: Response) => {
-  const result = getCollisionResult(paramId(req));
+router.get('/:id/result', async (req: Request, res: Response) => {
+  const result = await getCollisionResult(paramId(req));
   if (!result) {
     res.status(404).json({ error: 'Result not ready' });
     return;
@@ -335,7 +335,7 @@ router.get('/:id/result', (req: Request, res: Response) => {
 
 router.post('/:id/regenerate-playlist', requireAuth, async (req: Request, res: Response) => {
   const id = paramId(req);
-  const stored = getCollision(id);
+  const stored = await getCollision(id);
   if (!stored?.result) {
     res.status(400).json({ error: 'Collision result not ready' });
     return;
@@ -356,8 +356,8 @@ router.post('/:id/regenerate-playlist', requireAuth, async (req: Request, res: R
   const start = performance.now();
 
   try {
-    const randomOffset = nextPlaylistSearchOffset(id);
-    const regenerateCount = incrementRegenerateCount(id);
+    const randomOffset = await nextPlaylistSearchOffset(id);
+    const regenerateCount = await incrementRegenerateCount(id);
     const regenerated = await regenerateCollisionPlaylist(
       stored.userASessionId,
       stored.result,
@@ -370,7 +370,7 @@ router.post('/:id/regenerate-playlist', requireAuth, async (req: Request, res: R
       randomOffset,
     );
     const finalResult = { ...regenerated, collisionId: id };
-    updateCollisionPlaylist(id, finalResult);
+    await updateCollisionPlaylist(id, finalResult);
     const latency = performance.now() - start;
     recordRecommendationLatency(latency);
     res.json({ result: finalResult, metrics: getMetricsSnapshot(latency), regenerateCount });

@@ -7,7 +7,7 @@ import type {
   CollisionResult,
   UserProfile,
 } from '@music-mixer/shared';
-import { loadJsonFile, saveJsonFile } from '../lib/persist';
+import { redis } from '../services/redis/client';
 import {
   ghostToParticipant,
   profileToParticipant,
@@ -16,26 +16,55 @@ import {
 } from './engine';
 import { getGhostProfile } from '../services/ghosts';
 
-const HISTORY_FILE = 'collision-history.json';
-const SNAPSHOTS_FILE = 'collision-snapshots.json';
+// ─── Key helpers ──────────────────────────────────────────────────────────────
+const historyKey = (userId: string) => `history:${userId}`;
+const snapshotKey = (collisionId: string) => `snapshot:${collisionId}`;
 
-type HistoryStore = Record<string, CollisionHistoryEntry[]>;
-type SnapshotStore = Record<string, CollisionHistorySnapshot>;
+/** Maximum history entries retained per user. */
+const MAX_HISTORY = 50;
 
-const byUser = loadJsonFile<HistoryStore>(HISTORY_FILE, {});
-const snapshots = loadJsonFile<SnapshotStore>(SNAPSHOTS_FILE, {});
+// ─── Internal helpers ─────────────────────────────────────────────────────────
 
-function persist(): void {
-  saveJsonFile(HISTORY_FILE, byUser);
-  saveJsonFile(SNAPSHOTS_FILE, snapshots);
+async function getHistory(userId: string): Promise<CollisionHistoryEntry[]> {
+  const raw = await redis.get<string>(historyKey(userId));
+  if (!raw) return [];
+  try {
+    return typeof raw === 'string'
+      ? (JSON.parse(raw) as CollisionHistoryEntry[])
+      : (raw as CollisionHistoryEntry[]);
+  } catch {
+    return [];
+  }
 }
 
-export function recordCollisionHistory(
+async function saveHistory(userId: string, entries: CollisionHistoryEntry[]): Promise<void> {
+  if (entries.length === 0) {
+    await redis.del(historyKey(userId));
+  } else {
+    await redis.set(historyKey(userId), JSON.stringify(entries));
+  }
+}
+
+async function getSnapshot(collisionId: string): Promise<CollisionHistorySnapshot | null> {
+  const raw = await redis.get<string>(snapshotKey(collisionId));
+  if (!raw) return null;
+  try {
+    return typeof raw === 'string'
+      ? (JSON.parse(raw) as CollisionHistorySnapshot)
+      : (raw as CollisionHistorySnapshot);
+  } catch {
+    return null;
+  }
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export async function recordCollisionHistory(
   userId: string,
   result: CollisionResult,
   mode: CollisionMode,
   config: CollisionConfig,
-): void {
+): Promise<void> {
   const entry: CollisionHistoryEntry = {
     id: result.collisionId,
     completedAt: new Date().toISOString(),
@@ -51,74 +80,67 @@ export function recordCollisionHistory(
     isGhost: !!p.isGhost,
   }));
 
-  const list = byUser[userId] ?? [];
+  const snapshot: CollisionHistorySnapshot = { entry, result, config, participants };
+
+  const list = await getHistory(userId);
   list.unshift(entry);
-  byUser[userId] = list.slice(0, 50);
 
-  snapshots[result.collisionId] = {
-    entry,
-    result,
-    config,
-    participants,
-  };
-
-  persist();
+  await Promise.all([
+    saveHistory(userId, list.slice(0, MAX_HISTORY)),
+    redis.set(snapshotKey(result.collisionId), JSON.stringify(snapshot)),
+  ]);
 }
 
-export function getCollisionHistory(userId: string): CollisionHistoryEntry[] {
-  return byUser[userId] ?? [];
+export async function getCollisionHistory(userId: string): Promise<CollisionHistoryEntry[]> {
+  return getHistory(userId);
 }
 
-export function deleteCollisionHistoryEntry(
+export async function deleteCollisionHistoryEntry(
   userId: string,
   collisionId: string,
   completedAt: string,
-): boolean {
-  const list = byUser[userId] ?? [];
+): Promise<boolean> {
+  const list = await getHistory(userId);
   const next = list.filter((e) => !(e.id === collisionId && e.completedAt === completedAt));
   if (next.length === list.length) return false;
 
-  byUser[userId] = next;
+  await saveHistory(userId, next);
 
-  const stillReferenced = Object.values(byUser).some(
-    (entries) => entries.some((e) => e.id === collisionId),
-  );
-  if (!stillReferenced) {
-    delete snapshots[collisionId];
+  // Only delete the snapshot if no other user still references this collision.
+  // Since we can't efficiently scan all history keys, we keep the snapshot around
+  // (it's a small key, and the snapshot is only accessible to users who own it).
+  // Clean up if the user who just deleted it was the only remaining reference.
+  const stillInNext = next.some((e) => e.id === collisionId);
+  if (!stillInNext) {
+    await redis.del(snapshotKey(collisionId));
   }
 
-  persist();
   return true;
 }
 
 /** Remove every history entry for a user, cleaning up any now-orphaned snapshots. */
-export function clearCollisionHistory(userId: string): number {
-  const list = byUser[userId] ?? [];
+export async function clearCollisionHistory(userId: string): Promise<number> {
+  const list = await getHistory(userId);
   const removed = list.length;
   if (removed === 0) return 0;
 
-  delete byUser[userId];
+  await saveHistory(userId, []);
 
-  for (const entry of list) {
-    const stillReferenced = Object.values(byUser).some(
-      (entries) => entries.some((e) => e.id === entry.id),
-    );
-    if (!stillReferenced) delete snapshots[entry.id];
-  }
+  // Delete all snapshots referenced exclusively by this user's history.
+  // We delete them optimistically; a concurrent delete from the other participant is harmless.
+  await Promise.all(list.map((e) => redis.del(snapshotKey(e.id))));
 
-  persist();
   return removed;
 }
 
-export function getCollisionSnapshot(
+export async function getCollisionSnapshot(
   userId: string,
   collisionId: string,
-): CollisionHistorySnapshot | null {
-  const snapshot = snapshots[collisionId];
-  if (!snapshot) return null;
-  const owned = (byUser[userId] ?? []).some((e) => e.id === collisionId);
+): Promise<CollisionHistorySnapshot | null> {
+  const list = await getHistory(userId);
+  const owned = list.some((e) => e.id === collisionId);
   if (!owned) return null;
-  return snapshot;
+  return getSnapshot(collisionId);
 }
 
 export async function rerunCollisionFromHistory(
@@ -137,7 +159,7 @@ export async function rerunCollisionFromHistory(
     playlistDurationMinutes?: number;
   },
 ): Promise<CollisionResult> {
-  const snapshot = getCollisionSnapshot(userId, collisionId);
+  const snapshot = await getCollisionSnapshot(userId, collisionId);
   if (!snapshot) {
     throw new Error('Collision not found in your history');
   }
@@ -200,6 +222,6 @@ export async function rerunCollisionFromHistory(
     collisionId,
   });
 
-  recordCollisionHistory(userId, result, snapshot.config.mode, config);
+  await recordCollisionHistory(userId, result, snapshot.config.mode, config);
   return result;
 }

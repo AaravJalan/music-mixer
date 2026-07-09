@@ -45,7 +45,7 @@ export async function getDashboardAnalytics(
   userId?: string,
 ): Promise<DashboardResponse> {
   if (userId) {
-    const cached = getCachedDashboard(userId, term);
+    const cached = await getCachedDashboard(userId, term);
     if (cached) return cached;
   }
 
@@ -126,7 +126,7 @@ export async function getDashboardAnalytics(
   };
 
   if (userId) {
-    setCachedDashboard(userId, term, response);
+    await setCachedDashboard(userId, term, response);
   }
 
   return response;

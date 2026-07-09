@@ -32,17 +32,17 @@ function authErrorRedirect(code: string, redirect?: string): string {
   return base;
 }
 
-router.get('/me', (req: Request, res: Response) => {
+router.get('/me', async (req: Request, res: Response) => {
   const sessionId = req.cookies?.[SESSION_COOKIE];
   if (!sessionId) {
     res.json({ authenticated: false, user: null });
     return;
   }
-  const user = getSessionUser(sessionId);
+  const user = await getSessionUser(sessionId);
   res.json({ authenticated: !!user, user });
 });
 
-router.get('/login', (req: Request, res: Response) => {
+router.get('/login', async (req: Request, res: Response) => {
   if (!isSpotifyConfigured()) {
     res.status(503).json({
       error: 'Spotify OAuth is not configured. Add credentials to .env',
@@ -53,7 +53,7 @@ router.get('/login', (req: Request, res: Response) => {
 
   const redirect = safeRedirect(req.query.redirect as string | undefined);
   const forceConsent = req.query.consent === '1' || req.query.force === '1';
-  const state = createOAuthState(redirect);
+  const state = await createOAuthState(redirect);
   res.redirect(buildAuthorizeUrl(state, forceConsent));
 });
 
@@ -70,7 +70,7 @@ router.get('/callback', async (req: Request, res: Response) => {
     return;
   }
 
-  const redirect = consumeOAuthState(state);
+  const redirect = await consumeOAuthState(state);
   if (!redirect) {
     res.redirect(authErrorRedirect('invalid_state'));
     return;
@@ -80,13 +80,13 @@ router.get('/callback', async (req: Request, res: Response) => {
     const tokens = await exchangeCodeForTokens(code);
     const user = await fetchSpotifyProfile(tokens.access_token);
 
-    let refreshToken = tokens.refresh_token ?? getStoredRefreshToken(user.id);
+    let refreshToken = tokens.refresh_token ?? (await getStoredRefreshToken(user.id));
     if (!refreshToken) {
       res.redirect(authErrorRedirect('reconsent_required', redirect));
       return;
     }
 
-    const sessionId = createSession(user, {
+    const sessionId = await createSession(user, {
       accessToken: tokens.access_token,
       refreshToken,
       expiresIn: tokens.expires_in,
@@ -112,9 +112,9 @@ router.get('/callback', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/logout', (req: Request, res: Response) => {
+router.post('/logout', async (req: Request, res: Response) => {
   const sessionId = req.cookies?.[SESSION_COOKIE];
-  if (sessionId) destroySession(sessionId);
+  if (sessionId) await destroySession(sessionId);
   res.clearCookie(SESSION_COOKIE, sessionCookieOptions(0));
   res.json({ ok: true });
 });

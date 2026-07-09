@@ -1,3 +1,10 @@
+/**
+ * Local development entry point.
+ *
+ * Starts the Express app on a local TCP port.
+ * This file is ONLY used for `npm run dev` — it is NOT deployed to Lambda.
+ * The Lambda entry point is lambda.ts, which wraps the same app via serverless-http.
+ */
 import dns from 'node:dns';
 import { createApp } from './app';
 import { env } from './config/env';

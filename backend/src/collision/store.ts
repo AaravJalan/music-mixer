@@ -2,6 +2,7 @@ import type { CollisionSession, CollisionStatus, UserProfile } from '@music-mixe
 import type { CollisionConfig, CollisionMode } from '@music-mixer/shared';
 import type { CollisionResult } from '@music-mixer/shared';
 import { v4 as uuidv4 } from 'uuid';
+import { redis } from '../services/redis/client';
 
 const DEFAULT_CONFIG: CollisionConfig = {
   participantWeights: [50, 50],
@@ -15,7 +16,7 @@ const DEFAULT_CONFIG: CollisionConfig = {
   mode: 'link',
 };
 
-interface StoredCollision {
+export interface StoredCollision {
   session: CollisionSession;
   userASessionId: string;
   userBSessionId: string | null;
@@ -27,14 +28,54 @@ interface StoredCollision {
   regenerateCount: number;
 }
 
-const collisions = new Map<string, StoredCollision>();
-const pendingForUser = new Map<string, string[]>();
+// ─── Key helpers ──────────────────────────────────────────────────────────────
+const collisionKey = (id: string) => `collision:${id}`;
+const pendingKey = (userId: string) => `pending:${userId}`;
+
+/** 24-hour TTL — abandoned sessions are garbage-collected automatically. */
+const COLLISION_TTL = 86400;
+
+// ─── Internal helpers ─────────────────────────────────────────────────────────
+
+async function getStored(id: string): Promise<StoredCollision | null> {
+  const raw = await redis.get<string>(collisionKey(id));
+  if (!raw) return null;
+  try {
+    return typeof raw === 'string' ? (JSON.parse(raw) as StoredCollision) : (raw as StoredCollision);
+  } catch {
+    return null;
+  }
+}
+
+async function saveStored(id: string, stored: StoredCollision): Promise<void> {
+  await redis.set(collisionKey(id), JSON.stringify(stored), { ex: COLLISION_TTL });
+}
+
+async function getPendingIds(userId: string): Promise<string[]> {
+  const raw = await redis.get<string>(pendingKey(userId));
+  if (!raw) return [];
+  try {
+    return typeof raw === 'string' ? (JSON.parse(raw) as string[]) : (raw as string[]);
+  } catch {
+    return [];
+  }
+}
+
+async function savePendingIds(userId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    await redis.del(pendingKey(userId));
+  } else {
+    await redis.set(pendingKey(userId), JSON.stringify(ids), { ex: COLLISION_TTL });
+  }
+}
 
 function defaultConfig(overrides?: Partial<CollisionConfig>): CollisionConfig {
   return { ...DEFAULT_CONFIG, ...overrides };
 }
 
-export function createCollision(
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export async function createCollision(
   userA: UserProfile,
   userASessionId: string,
   baseUrl: string,
@@ -43,7 +84,7 @@ export function createCollision(
     friendId?: string;
     config?: Partial<CollisionConfig>;
   },
-): CollisionSession {
+): Promise<CollisionSession> {
   const id = uuidv4().slice(0, 8);
   const mode = options?.mode ?? 'link';
   const config = defaultConfig({ ...options?.config, mode });
@@ -59,7 +100,7 @@ export function createCollision(
     friendId: options?.friendId,
   };
 
-  collisions.set(id, {
+  const stored: StoredCollision = {
     session,
     userASessionId,
     userBSessionId: null,
@@ -68,25 +109,27 @@ export function createCollision(
     intendedFriendId: options?.friendId,
     playlistSearchOffset: 0,
     regenerateCount: 0,
-  });
+  };
+
+  await saveStored(id, stored);
 
   if (options?.friendId) {
-    const pending = pendingForUser.get(options.friendId) ?? [];
+    const pending = await getPendingIds(options.friendId);
     pending.push(id);
-    pendingForUser.set(options.friendId, pending);
+    await savePendingIds(options.friendId, pending);
   }
 
   return session;
 }
 
-export function createGhostCollision(
+export async function createGhostCollision(
   userA: UserProfile,
   userASessionId: string,
   userB: UserProfile,
   ghostId: string,
   baseUrl: string,
   configOverrides?: Partial<CollisionConfig>,
-): CollisionSession {
+): Promise<CollisionSession> {
   const id = uuidv4().slice(0, 8);
   const config = defaultConfig({
     ...configOverrides,
@@ -105,7 +148,7 @@ export function createGhostCollision(
     friendId: ghostId,
   };
 
-  collisions.set(id, {
+  const stored: StoredCollision = {
     session,
     userASessionId,
     userBSessionId: null,
@@ -114,22 +157,23 @@ export function createGhostCollision(
     ghostUserBId: ghostId,
     playlistSearchOffset: 0,
     regenerateCount: 0,
-  });
+  };
 
+  await saveStored(id, stored);
   return session;
 }
 
-export function isGhostCollision(id: string): boolean {
-  const stored = collisions.get(id);
-  return Boolean(stored?.ghostUserBId || (stored?.session.userB?.id?.startsWith('ghost-')));
+export async function isGhostCollision(id: string): Promise<boolean> {
+  const stored = await getStored(id);
+  return Boolean(stored?.ghostUserBId || stored?.session.userB?.id?.startsWith('ghost-'));
 }
 
-export function createSoloCollision(
+export async function createSoloCollision(
   user: UserProfile,
   sessionId: string,
   baseUrl: string,
   configOverrides?: Partial<CollisionConfig>,
-): CollisionSession {
+): Promise<CollisionSession> {
   const id = uuidv4().slice(0, 8);
   const virtualB: UserProfile = {
     id: `${user.id}-recent`,
@@ -156,7 +200,7 @@ export function createSoloCollision(
     config,
   };
 
-  collisions.set(id, {
+  const stored: StoredCollision = {
     session,
     userASessionId: sessionId,
     userBSessionId: sessionId,
@@ -164,28 +208,30 @@ export function createSoloCollision(
     config,
     playlistSearchOffset: 0,
     regenerateCount: 0,
-  });
+  };
 
+  await saveStored(id, stored);
   return session;
 }
 
-export function getCollision(id: string): StoredCollision | null {
-  return collisions.get(id) ?? null;
+export async function getCollision(id: string): Promise<StoredCollision | null> {
+  return getStored(id);
 }
 
-export function getPendingCollisions(userId: string): CollisionSession[] {
-  const ids = pendingForUser.get(userId) ?? [];
-  return ids
-    .map((id) => collisions.get(id)?.session)
+export async function getPendingCollisions(userId: string): Promise<CollisionSession[]> {
+  const ids = await getPendingIds(userId);
+  const results = await Promise.all(ids.map((id) => getStored(id)));
+  return results
+    .map((s) => s?.session)
     .filter((s): s is CollisionSession => s !== undefined && s.status !== 'complete');
 }
 
-export function joinCollision(
+export async function joinCollision(
   id: string,
   userB: UserProfile,
   userBSessionId: string,
-): CollisionSession | null {
-  const stored = collisions.get(id);
+): Promise<CollisionSession | null> {
+  const stored = await getStored(id);
   if (!stored || stored.session.status !== 'waiting') return null;
   if (stored.session.userA?.id === userB.id) return null;
 
@@ -194,62 +240,75 @@ export function joinCollision(
   stored.userBSessionId = userBSessionId;
 
   if (stored.intendedFriendId) {
-    const pending = pendingForUser.get(stored.intendedFriendId) ?? [];
-    pendingForUser.set(
+    const pending = await getPendingIds(stored.intendedFriendId);
+    await savePendingIds(
       stored.intendedFriendId,
       pending.filter((cid) => cid !== id),
     );
   }
 
+  await saveStored(id, stored);
   return stored.session;
 }
 
-export function updateCollisionConfig(id: string, partial: Partial<CollisionConfig>): CollisionConfig | null {
-  const stored = collisions.get(id);
+export async function updateCollisionConfig(id: string, partial: Partial<CollisionConfig>): Promise<CollisionConfig | null> {
+  const stored = await getStored(id);
   if (!stored) return null;
   stored.config = { ...stored.config, ...partial };
   stored.session.config = stored.config;
+  await saveStored(id, stored);
   return stored.config;
 }
 
-export function setCollisionComplete(id: string, result: CollisionResult): void {
-  const stored = collisions.get(id);
+export async function setCollisionComplete(id: string, result: CollisionResult): Promise<void> {
+  const stored = await getStored(id);
   if (!stored) return;
   stored.session.status = 'complete';
   stored.result = { ...result, collisionId: id };
+  await saveStored(id, stored);
 }
 
-export function getCollisionResult(id: string): CollisionResult | null {
-  return collisions.get(id)?.result ?? null;
+export async function getCollisionResult(id: string): Promise<CollisionResult | null> {
+  const stored = await getStored(id);
+  return stored?.result ?? null;
 }
 
-export function nextPlaylistSearchOffset(id: string): number {
-  const stored = collisions.get(id);
+export async function nextPlaylistSearchOffset(id: string): Promise<number> {
+  const stored = await getStored(id);
   const offset = Math.floor(Math.random() * 51);
-  if (stored) stored.playlistSearchOffset = offset;
+  if (stored) {
+    stored.playlistSearchOffset = offset;
+    await saveStored(id, stored);
+  }
   return offset;
 }
 
-export function incrementRegenerateCount(id: string): number {
-  const stored = collisions.get(id);
+export async function incrementRegenerateCount(id: string): Promise<number> {
+  const stored = await getStored(id);
   if (!stored) return 0;
   stored.regenerateCount += 1;
   stored.session.regenerateCount = stored.regenerateCount;
+  await saveStored(id, stored);
   return stored.regenerateCount;
 }
 
-export function updateCollisionPlaylist(id: string, result: CollisionResult): CollisionResult | null {
-  const stored = collisions.get(id);
+export async function updateCollisionPlaylist(id: string, result: CollisionResult): Promise<CollisionResult | null> {
+  const stored = await getStored(id);
   if (!stored?.result) return null;
   stored.result = { ...result, collisionId: id };
+  await saveStored(id, stored);
   return stored.result;
 }
 
-export function updateCollisionStatus(id: string, status: CollisionStatus): void {
-  const stored = collisions.get(id);
-  if (stored) stored.session.status = status;
+export async function updateCollisionStatus(id: string, status: CollisionStatus): Promise<void> {
+  const stored = await getStored(id);
+  if (stored) {
+    stored.session.status = status;
+    await saveStored(id, stored);
+  }
 }
 
-export function getStoredConfig(id: string): CollisionConfig | null {
-  return collisions.get(id)?.config ?? null;
+export async function getStoredConfig(id: string): Promise<CollisionConfig | null> {
+  const stored = await getStored(id);
+  return stored?.config ?? null;
 }

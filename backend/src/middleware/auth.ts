@@ -6,13 +6,13 @@ export function getSessionId(req: Request): string | undefined {
   return req.cookies?.[SESSION_COOKIE];
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const sessionId = getSessionId(req);
   if (!sessionId) {
     res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHORIZED' });
     return;
   }
-  const user = getSessionUser(sessionId);
+  const user = await getSessionUser(sessionId);
   if (!user) {
     res.status(401).json({ error: 'Session expired', code: 'SESSION_EXPIRED' });
     return;
