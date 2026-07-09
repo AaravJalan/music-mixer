@@ -1,0 +1,62 @@
+import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { requireAuth } from '../middleware/auth';
+import {
+  createFriendInvite,
+  acceptFriendInvite,
+  getFriends,
+  removeFriend,
+} from '../services/friends/store';
+import { getCachedProfile } from '../services/session/manager';
+import { getPendingCollisions } from '../services/collision/store';
+import { getDefaultGhostFriends, resolveFriendProfile } from '../services/friends/ghostFriends';
+import { isGhostUserId } from '../services/sandbox/ghostProfiles';
+
+const router = Router();
+
+router.get('/', requireAuth, async (req: Request, res: Response) => {
+  const userId = (req as Request & { user: { id: string } }).user.id;
+  const friendIds = getFriends(userId);
+  const realFriendsRaw = await Promise.all(
+    friendIds.map(async (f) => {
+      const profile = getCachedProfile(f.userId) ?? (await resolveFriendProfile(f.userId));
+      if (!profile) return null;
+      return { user: profile, addedAt: f.addedAt, isGhost: isGhostUserId(f.userId) };
+    })
+  );
+  const realFriends = realFriendsRaw.filter((f): f is NonNullable<typeof f> => f !== null);
+
+  const ghostIds = new Set(realFriends.filter((f) => f.isGhost).map((f) => f.user.id));
+  const defaultGhosts = await getDefaultGhostFriends();
+  const ghosts = defaultGhosts.filter((g) => !ghostIds.has(g.user.id));
+  const friends = [...ghosts, ...realFriends.filter((f) => !f.isGhost)];
+
+  const pendingCollisions = getPendingCollisions(userId);
+  res.json({ friends, pendingCollisions });
+});
+
+router.post('/invite', requireAuth, (req: Request, res: Response) => {
+  const user = (req as Request & { user: import('@music-mixer/shared').UserProfile }).user;
+  const { code, inviteUrl } = createFriendInvite(user);
+  res.json({ code, inviteUrl });
+});
+
+router.post('/accept/:code', requireAuth, (req: Request, res: Response) => {
+  const user = (req as Request & { user: import('@music-mixer/shared').UserProfile }).user;
+  const code = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code;
+  const friend = acceptFriendInvite(code, user);
+  if (!friend) {
+    res.status(400).json({ error: 'Invalid or expired invite' });
+    return;
+  }
+  res.json({ friend });
+});
+
+router.delete('/:friendId', requireAuth, (req: Request, res: Response) => {
+  const userId = (req as Request & { user: { id: string } }).user.id;
+  const friendId = Array.isArray(req.params.friendId) ? req.params.friendId[0] : req.params.friendId;
+  removeFriend(userId, friendId);
+  res.json({ ok: true });
+});
+
+export default router;

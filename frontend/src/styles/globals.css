@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-white/10;
+  }
+
+  body {
+    @apply bg-surface text-white antialiased;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-pink via-accent-purple to-accent-cyan;
+  }
+
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+
+  .glow-pink {
+    box-shadow: 0 0 60px rgba(255, 45, 106, 0.15);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 60px rgba(139, 92, 246, 0.15);
+  }
+}
