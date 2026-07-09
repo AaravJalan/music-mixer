@@ -600,6 +600,7 @@ The frontend is a Vite SPA that can easily be hosted on Vercel.
 3. **Build Command:** Turn on the override toggle and set it to: `npm run build -w @music-mixer/shared && npm run build` (This ensures the shared package compiles before the frontend).
 4. **Environment Variables:**
    - Add `VITE_API_URL` and set it to your production SST Lambda API URL (e.g. `https://<api-id>.lambda-url.<region>.on.aws/api`).
+5. **SPA Routing:** The `frontend/vercel.json` file is already included to ensure React Router works correctly on refresh (rewriting all requests to `/index.html`).
 
 Vercel will handle the rest, building the `frontend` workspace and serving your static assets globally!
 
