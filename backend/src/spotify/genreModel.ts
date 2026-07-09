@@ -1,4 +1,4 @@
-import type { AudioFeatureVector } from '@music-mixer/shared';
+import type { AudioFeatureVector, GenreStat } from '@music-mixer/shared';
 import { AUDIO_FEATURE_KEYS } from '@music-mixer/shared';
 
 /** Anchor genre → baseline 6D coordinates (2026 heuristic model). */
@@ -28,7 +28,6 @@ export const ANCHOR_GENRE_PROFILES: Record<string, AudioFeatureVector> = {
 
 const ANCHOR_KEYS = Object.keys(ANCHOR_GENRE_PROFILES).filter((k) => k !== 'default');
 
-/** Sub-genre patterns mapped back to primary anchor genres. */
 const SUB_GENRE_RULES: Array<{ test: (g: string) => boolean; anchor: string }> = [
   { test: (g) => /indie rock|alt(?:ernative)? rock|hard rock|punk|grunge|post-rock|shoegaze/.test(g), anchor: 'rock' },
   { test: (g) => /synthpop|dance pop|teen pop|bubblegum|electropop|art pop/.test(g), anchor: 'pop' },
@@ -45,7 +44,6 @@ export interface WeightedGenre {
   weight: number;
 }
 
-/** Broad cultural macro-categories for compatibility heuristics (2026 local fallback). */
 export type MacroCategory =
   | 'Macro_Electronic'
   | 'Macro_Rock'
@@ -61,7 +59,6 @@ export const MACRO_CATEGORY_LABELS: Record<MacroCategory, string> = {
   Macro_Acoustic: 'Acoustic',
 };
 
-/** Anchor genres grouped into macro-categories. */
 export const MACRO_GENRE_GROUPS: Record<MacroCategory, string[]> = {
   Macro_Electronic: ['electronic', 'edm', 'techno', 'house', 'synthpop', 'electropop', 'trance', 'dubstep'],
   Macro_Rock: ['metal', 'rock', 'alternative', 'punk', 'thrash', 'grunge', 'hard rock', 'indie rock'],
@@ -79,7 +76,6 @@ const MACRO_PATTERN_RULES: Array<{ test: (g: string) => boolean; macro: MacroCat
   { test: (g) => /folk|acoustic|country|singer-songwriter|americana|bluegrass|roots/.test(g), macro: 'Macro_Acoustic' },
 ];
 
-/** Adjacent macro pairs receive a moderate penalty; all others are culturally distant. */
 const ADJACENT_MACRO_PAIRS: Array<[MacroCategory, MacroCategory]> = [
   ['Macro_Electronic', 'Macro_HipHop'],
   ['Macro_Electronic', 'Macro_Rock'],
@@ -101,7 +97,6 @@ const ADJACENT_PAIR_KEYS = new Set(
   ADJACENT_MACRO_PAIRS.map(([a, b]) => pairKey(a, b)),
 );
 
-/** Map any genre string to its dominant macro-category. */
 export function resolveMacroCategory(genre: string): MacroCategory {
   const key = genre.toLowerCase().trim();
   if (!key) return 'Macro_Electronic';
@@ -153,7 +148,6 @@ function profileForAnchor(anchor: string): AudioFeatureVector {
   return ANCHOR_GENRE_PROFILES[anchor] ?? ANCHOR_GENRE_PROFILES.default;
 }
 
-/** Weighted average of anchor-mapped genre profiles → consolidated 6D taste vector. */
 export function computeWeightedTasteVector(weightedGenres: WeightedGenre[]): AudioFeatureVector {
   if (weightedGenres.length === 0) return { ...ANCHOR_GENRE_PROFILES.default };
 
@@ -182,7 +176,73 @@ export function computeWeightedTasteVector(weightedGenres: WeightedGenre[]): Aud
   return result;
 }
 
-/** @deprecated Use computeWeightedTasteVector — kept for mock compatibility. */
-export function estimateFeaturesFromGenres(genres: string[]): AudioFeatureVector {
-  return computeWeightedTasteVector(genres.map((genre) => ({ genre, weight: 1 })));
+export function dominantMacroCategory(genres: GenreStat[]): MacroCategory | null {
+  if (genres.length === 0) return null;
+
+  const scores = new Map<MacroCategory, number>();
+  for (const g of genres) {
+    const macro = resolveMacroCategory(g.genre);
+    scores.set(macro, (scores.get(macro) ?? 0) + (g.percentage || g.count || 1));
+  }
+
+  let best: MacroCategory | null = null;
+  let bestScore = -1;
+  for (const [macro, score] of scores) {
+    if (score > bestScore) {
+      best = macro;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+export function macroPenaltyMultiplier(genresA: GenreStat[], genresB: GenreStat[]): number {
+  const macroA = dominantMacroCategory(genresA);
+  const macroB = dominantMacroCategory(genresB);
+
+  if (!macroA || !macroB) {
+    console.warn(
+      '[macroPenalty] Missing genre data for macro analysis — applying distant fallback (0.65x)',
+    );
+    return 0.65;
+  }
+
+  return macroDistanceMultiplier(macroA, macroB);
+}
+
+export function applyMacroPenalty(baseSimilarity: number, multiplier: number): number {
+  return Math.min(1, Math.max(0, baseSimilarity * multiplier));
+}
+
+export interface MacroAdjustedSimilarity {
+  similarityScore: number;
+  macroA: MacroCategory | null;
+  macroB: MacroCategory | null;
+  multiplier: number;
+}
+
+export function computeMacroAdjustedSimilarity(
+  genresA: GenreStat[],
+  genresB: GenreStat[],
+  baseSimilarity: number,
+  labels?: { userA?: string; userB?: string },
+): MacroAdjustedSimilarity {
+  const macroA = dominantMacroCategory(genresA);
+  const macroB = dominantMacroCategory(genresB);
+  const multiplier = macroPenaltyMultiplier(genresA, genresB);
+  const similarityScore = applyMacroPenalty(baseSimilarity, multiplier);
+
+  const nameA = labels?.userA ?? 'User A';
+  const nameB = labels?.userB ?? 'User B';
+
+  if (macroA && macroB) {
+    const labelA = MACRO_CATEGORY_LABELS[macroA];
+    const labelB = MACRO_CATEGORY_LABELS[macroB];
+    console.info(
+      `[macroPenalty] ${nameA}=${labelA}, ${nameB}=${labelB} → ${multiplier}x ` +
+      `(base ${(baseSimilarity * 100).toFixed(1)}% → final ${(similarityScore * 100).toFixed(1)}%)`,
+    );
+  }
+
+  return { similarityScore, macroA, macroB, multiplier };
 }

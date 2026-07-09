@@ -1,6 +1,6 @@
 import type { GhostProfile, GenreStat } from '@music-mixer/shared';
-import type { ProfileArtist } from '../spotify/vectorEngine';
-import { loadJsonFile } from '../session/persist';
+import type { ProfileArtist } from '../spotify/taste';
+import { loadJsonFile } from '../lib/persist';
 
 const GHOST_FILE = 'ghost-profiles.json';
 
@@ -20,12 +20,6 @@ interface GhostDefinition {
   };
 }
 
-/**
- * Embedded persona metadata (vector / tagline / fallback genres). Track + artist data comes
- * from the pre-computed static `ghost-profiles.json` (see scripts/generateGhosts.ts). We no
- * longer hydrate ghosts dynamically from the Spotify API at request time — that caused
- * 0-track output, 403s, and latency regressions.
- */
 const GHOST_DEFINITIONS: GhostDefinition[] = [
   {
     id: 'ghost-thrasher',
@@ -69,7 +63,6 @@ const GHOST_DEFINITIONS: GhostDefinition[] = [
   },
 ];
 
-/** Remove null / undefined / empty / "default" genre strings. */
 export function cleanGenreList(genres: (string | null | undefined)[] | undefined): string[] {
   if (!Array.isArray(genres)) return [];
   const seen = new Set<string>();
@@ -85,11 +78,6 @@ export function cleanGenreList(genres: (string | null | undefined)[] | undefined
   return cleaned;
 }
 
-/**
- * Normalize a raw (script-generated or hand-edited) ghost record into a complete
- * GhostProfile, tolerating schema drift: missing keys, "default"/empty genres, absent IDs,
- * and the `tracks` vs `topTracks` naming inconsistency.
- */
 function normalizeGhost(raw: Record<string, any>, base: GhostDefinition | undefined): GhostProfile | null {
   const id = raw?.id ?? base?.id;
   if (!id) return null;
@@ -115,10 +103,6 @@ function normalizeGhost(raw: Record<string, any>, base: GhostDefinition | undefi
   };
 }
 
-/**
- * Synchronously read the pre-computed static ghost-profiles.json and merge with embedded
- * persona metadata. No network calls, no runtime caching layer.
- */
 function loadGhosts(): GhostProfile[] {
   const fromFile = loadJsonFile<Record<string, any>[]>(GHOST_FILE, []);
   const fileById = new Map<string, Record<string, any>>(
@@ -131,7 +115,6 @@ function loadGhosts(): GhostProfile[] {
   for (const def of GHOST_DEFINITIONS) {
     const raw = fileById.get(def.id);
     const normalized = raw ? normalizeGhost(raw, def) : null;
-    // Fall back to embedded metadata (empty track/artist lists) if the file lacks this persona.
     merged.push(normalized ?? { ...def, tracks: [], topArtists: [] });
     fileById.delete(def.id);
   }

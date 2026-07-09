@@ -5,7 +5,7 @@ import {
   buildAuthorizeUrl,
   exchangeCodeForTokens,
   fetchSpotifyProfile,
-} from '../services/spotify/auth';
+} from '../spotify/auth';
 import {
   consumeOAuthState,
   createOAuthState,
@@ -13,9 +13,9 @@ import {
   destroySession,
   getSessionUser,
   getStoredRefreshToken,
-} from '../services/session/manager';
-import { SESSION_COOKIE, sessionCookieOptions } from '../utils/cookies';
-import { isNetworkError } from '../utils/fetch';
+} from '../services/session';
+import { SESSION_COOKIE, sessionCookieOptions } from '../lib/cookies';
+import { isNetworkError } from '../lib/fetch';
 
 const router = Router();
 

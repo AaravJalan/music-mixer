@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { listGhostProfiles } from '../services/sandbox/ghostProfiles';
-import { runSandboxCollision } from '../services/collision/engine';
+import { listGhostProfiles } from '../services/ghosts';
+import { runSandboxCollision } from '../collision/engine';
 import { recordRecommendationLatency, getMetricsSnapshot } from '../middleware/telemetry';
-import { recordCollisionHistory } from '../services/collision/history';
+import { recordCollisionHistory } from '../collision/history';
 
 const router = Router();
 

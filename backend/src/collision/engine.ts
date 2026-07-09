@@ -6,21 +6,21 @@ import type {
   TasteTimeRange,
   UserProfile,
 } from '@music-mixer/shared';
-import { weightedCentroid } from '../../math/vector';
-import { averagePairwiseSimilarity } from '../../math/similarity';
-import { estimateListeningHoursFromTopTracks } from '../../math/listening';
-import { findSharedTopArtists } from '../../math/sharedArtists';
+import { weightedCentroid } from '../math/vector';
+import { averagePairwiseSimilarity } from '../math/similarity';
+import { estimateListeningHoursFromTopTracks } from '../math/listening';
+import { findSharedTopArtists } from '../math/sharedArtists';
 import type { TopTrack } from '../spotify/tracks';
-import type { ProfileArtist } from '../spotify/vectorEngine';
-import { buildUserTasteProfile } from '../spotify/vectorEngine';
-import { computeMacroAdjustedSimilarity } from '../spotify/macroPenalty';
+import type { ProfileArtist } from '../spotify/taste';
+import { buildUserTasteProfile } from '../spotify/taste';
+import { computeMacroAdjustedSimilarity } from '../spotify/genreModel';
 import {
   buildMultiCollisionPlaylist,
   resolveGenreHints,
   resolvePlaylistBuildTargets,
-} from '../spotify/recommendations';
-import { sharedGenresMulti } from '../../math/genres';
-import { ghostGenresToStats, getGhostProfile, ghostToProfileArtists, isGhostUserId } from '../sandbox/ghostProfiles';
+} from '../spotify/build';
+import { sharedGenresMulti } from '../math/genres';
+import { ghostGenresToStats, getGhostProfile, ghostToProfileArtists, isGhostUserId } from '../services/ghosts';
 
 const FEATURE_LABELS: Record<string, string> = {
   danceability: 'Danceability',

@@ -4,11 +4,11 @@ import type {
   DashboardTopTrack,
   TasteTimeRange,
 } from '@music-mixer/shared';
-import { buildDashboardInsights } from '../../math/insights';
-import { findSonicOutlier } from '../../math/outlier';
-import { estimateListeningHoursFromTopTracks, estimateTotalPlays } from '../../math/listening';
-import { getCachedDashboard, setCachedDashboard } from '../cache/dashboardCache';
-import { buildUserTasteProfile } from '../spotify/vectorEngine';
+import { buildDashboardInsights } from '../math/insights';
+import { findSonicOutlier } from '../math/outlier';
+import { estimateListeningHoursFromTopTracks, estimateTotalPlays } from '../math/listening';
+import { getCachedDashboard, setCachedDashboard } from '../lib/cache';
+import { buildUserTasteProfile } from '../spotify/taste';
 
 const FEATURE_LABELS: Record<string, string> = {
   danceability: 'Danceability',

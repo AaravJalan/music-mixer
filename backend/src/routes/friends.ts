@@ -6,11 +6,12 @@ import {
   acceptFriendInvite,
   getFriends,
   removeFriend,
-} from '../services/friends/store';
-import { getCachedProfile } from '../services/session/manager';
-import { getPendingCollisions } from '../services/collision/store';
-import { getDefaultGhostFriends, resolveFriendProfile } from '../services/friends/ghostFriends';
-import { isGhostUserId } from '../services/sandbox/ghostProfiles';
+  getDefaultGhostFriends,
+  resolveFriendProfile,
+} from '../services/friends';
+import { getCachedProfile } from '../services/session';
+import { getPendingCollisions } from '../collision/store';
+import { isGhostUserId } from '../services/ghosts';
 
 const router = Router();
 

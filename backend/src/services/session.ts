@@ -1,7 +1,7 @@
 import type { UserProfile } from '@music-mixer/shared';
 import { v4 as uuidv4 } from 'uuid';
 import { refreshAccessToken } from '../spotify/auth';
-import { loadJsonFile, saveJsonFile } from './persist';
+import { loadJsonFile, saveJsonFile } from '../lib/persist';
 
 export interface SessionData {
   user: UserProfile;

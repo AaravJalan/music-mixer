@@ -13,8 +13,8 @@ import fs from 'fs';
 import path from 'path';
 import type { GhostProfile } from '@music-mixer/shared';
 import { normalizeSpotifyId } from '@music-mixer/shared';
-import { spotifyFetch } from '../src/services/spotify/client';
-import { fetchWithRetry } from '../src/utils/fetch';
+import { spotifyFetch } from '../src/spotify/client';
+import { fetchWithRetry } from '../src/lib/fetch';
 
 config({ path: path.resolve(__dirname, '../.env') });
 config({ path: path.resolve(__dirname, '../../.env') });

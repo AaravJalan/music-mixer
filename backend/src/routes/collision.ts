@@ -17,19 +17,19 @@ import {
   nextPlaylistSearchOffset,
   incrementRegenerateCount,
   updateCollisionPlaylist,
-} from '../services/collision/store';
+} from '../collision/store';
 import {
   ghostToParticipant,
   profileToParticipant,
   runCollisionEngine,
   runMultiUserCollision,
   regenerateCollisionPlaylist,
-} from '../services/collision/engine';
-import { recordCollisionHistory, getCollisionHistory, getCollisionSnapshot, rerunCollisionFromHistory, deleteCollisionHistoryEntry, clearCollisionHistory } from '../services/collision/history';
+} from '../collision/engine';
+import { recordCollisionHistory, getCollisionHistory, getCollisionSnapshot, rerunCollisionFromHistory, deleteCollisionHistoryEntry, clearCollisionHistory } from '../collision/history';
 import { recordRecommendationLatency, getMetricsSnapshot } from '../middleware/telemetry';
 import { env } from '../config/env';
-import { areFriends } from '../services/friends/store';
-import { getGhostProfile, ghostToUserProfile, isGhostUserId } from '../services/sandbox/ghostProfiles';
+import { areFriends } from '../services/friends';
+import { getGhostProfile, ghostToUserProfile, isGhostUserId } from '../services/ghosts';
 
 const router = Router();
 

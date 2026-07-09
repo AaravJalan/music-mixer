@@ -1,7 +1,7 @@
 import type { AudioFeatureVector, DashboardTopTrack, SonicOutlierInsight } from '@music-mixer/shared';
 import { AUDIO_FEATURE_KEYS } from '@music-mixer/shared';
-import { computeWeightedTasteVector } from '../services/spotify/featureEstimate';
-import { inferGenresFromText } from '../services/spotify/genreInference';
+import { computeWeightedTasteVector } from '../spotify/genreModel';
+import { inferGenresFromText } from '../spotify/inference';
 
 const FEATURE_LABELS: Record<string, string> = {
   danceability: 'Danceability',

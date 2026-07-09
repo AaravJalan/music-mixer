@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from 'express';
-import { audioFeatureCache } from '../services/cache/audioFeatures';
 
 interface TelemetryState {
   recommendationLatencies: number[];
@@ -35,12 +34,14 @@ export function telemetryMiddleware(req: Request, res: Response, next: NextFunct
 }
 
 export function getMetricsSnapshot(recommendationLatencyMs: number) {
-  const cacheStats = audioFeatureCache.getStats();
+  const latencies = state.recommendationLatencies;
+  const avgLatency = latencies.length > 0
+    ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+    : 0;
+
   return {
     recommendationLatencyMs,
-    cacheHitRate: cacheStats.hitRate,
-    cacheHits: cacheStats.hits,
-    cacheMisses: cacheStats.misses,
+    avgRecommendationLatencyMs: Math.round(avgLatency * 100) / 100,
     totalRequests: state.totalRequests,
   };
 }

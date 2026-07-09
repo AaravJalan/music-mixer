@@ -1,7 +1,7 @@
 import type { RecommendationTrack } from '@music-mixer/shared';
-import { fetchWithRetry } from '../../utils/fetch';
-import { SPOTIFY_API_BASE } from '../../config/spotify';
-import { getValidAccessToken } from '../session/manager';
+import { fetchWithRetry } from '../lib/fetch';
+import { SPOTIFY_API_BASE } from '../config/env';
+import { getValidAccessToken } from '../services/session';
 
 interface SpotifyCreatePlaylistResponse {
   id: string;

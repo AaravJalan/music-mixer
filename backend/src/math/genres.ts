@@ -1,37 +1,8 @@
 import type { GenreStat } from '@music-mixer/shared';
 
-interface ArtistWithGenres {
-  genres: string[];
-}
-
 interface WeightedGenreInput {
   genre: string;
   weight: number;
-}
-
-/** Aggregate genre frequency across artists (each artist contributes its genres once). */
-export function aggregateGenres(artists: ArtistWithGenres[], limit = 10): GenreStat[] {
-  const counts = new Map<string, number>();
-
-  for (const artist of artists) {
-    const genres = artist.genres ?? [];
-    const seen = new Set<string>();
-    for (const genre of genres) {
-      if (seen.has(genre)) continue;
-      seen.add(genre);
-      counts.set(genre, (counts.get(genre) ?? 0) + 1);
-    }
-  }
-
-  const total = [...counts.values()].reduce((sum, n) => sum + n, 0) || 1;
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([genre, count]) => ({
-      genre,
-      count,
-      percentage: Math.round((count / total) * 100),
-    }));
 }
 
 /** Rank-weighted genre aggregation for dashboard display and vector hints. */
@@ -62,9 +33,4 @@ export function sharedGenresMulti(allGenres: GenreStat[][]): string[] {
   return first
     .map((g) => g.genre)
     .filter((genre) => sets.every((set) => set.has(genre)));
-}
-
-/** Genres appearing in both users' top-N genre lists. */
-export function sharedGenres(genresA: GenreStat[], genresB: GenreStat[]): string[] {
-  return sharedGenresMulti([genresA, genresB]);
 }

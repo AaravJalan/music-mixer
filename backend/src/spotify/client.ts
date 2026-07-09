@@ -1,6 +1,6 @@
-import { fetchWithRetry } from '../../utils/fetch';
-import { getValidAccessToken } from '../session/manager';
-import { SPOTIFY_API_BASE } from '../../config/spotify';
+import { fetchWithRetry } from '../lib/fetch';
+import { getValidAccessToken } from '../services/session';
+import { SPOTIFY_API_BASE } from '../config/env';
 
 export class SpotifyApiError extends Error {
   constructor(

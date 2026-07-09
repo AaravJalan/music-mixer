@@ -1,26 +1,28 @@
 import type { AudioFeatureVector, GenreStat, TasteTimeRange } from '@music-mixer/shared';
 import { SPOTIFY_TOP_TRACKS_LIMIT } from '@music-mixer/shared';
-import { aggregateWeightedGenres } from '../../math/genres';
-import { computeWeightedTasteVector, type WeightedGenre } from './featureEstimate';
-import { getCachedArtistGenres, setCachedArtistGenres } from '../cache/artistCache';
-import { inferGenresFromArtistName, inferGenresFromText } from './genreInference';
+import { aggregateWeightedGenres } from '../math/genres';
+import { computeWeightedTasteVector, type WeightedGenre } from './genreModel';
+import { getCachedArtistGenres, setCachedArtistGenres } from '../lib/cache';
+import { inferGenresFromArtistName, inferGenresFromText } from './inference';
 import { spotifyFetch } from './client';
 import { fetchTopTracks, resolveSpotifyTimeRange, type TopTrack } from './tracks';
 
-export type { MacroAdjustedSimilarity } from './macroPenalty';
-export { computeMacroAdjustedSimilarity, applyMacroPenalty, macroPenaltyMultiplier } from './macroPenalty';
+export type { MacroAdjustedSimilarity } from './genreModel';
 export {
+  computeMacroAdjustedSimilarity,
+  applyMacroPenalty,
+  macroPenaltyMultiplier,
   type MacroCategory,
   MACRO_CATEGORY_LABELS,
   resolveMacroCategory,
   macroDistanceMultiplier,
-} from './featureEstimate';
+} from './genreModel';
 export {
   LANGUAGE_VETO_BUCKETS,
   applyLinguisticVetoToPools,
   applyVetoToParticipantGenres,
   matchesRegionalBucket,
-} from './linguisticVeto';
+} from './veto';
 
 interface SpotifyArtist {
   id: string;

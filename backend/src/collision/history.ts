@@ -7,14 +7,14 @@ import type {
   CollisionResult,
   UserProfile,
 } from '@music-mixer/shared';
-import { loadJsonFile, saveJsonFile } from '../session/persist';
+import { loadJsonFile, saveJsonFile } from '../lib/persist';
 import {
   ghostToParticipant,
   profileToParticipant,
   runMultiUserCollision,
   type ParticipantBundle,
 } from './engine';
-import { getGhostProfile } from '../sandbox/ghostProfiles';
+import { getGhostProfile } from '../services/ghosts';
 
 const HISTORY_FILE = 'collision-history.json';
 const SNAPSHOTS_FILE = 'collision-snapshots.json';

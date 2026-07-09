@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { getCollisionResult } from '../services/collision/store';
-import { getCollisionSnapshot } from '../services/collision/history';
-import { exportPlaylistToSpotify } from '../services/spotify/playlist';
+import { getCollisionResult } from '../collision/store';
+import { getCollisionSnapshot } from '../collision/history';
+import { exportPlaylistToSpotify } from '../spotify/export';
 
 const router = Router();
 

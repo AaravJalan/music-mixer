@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import { getSessionUser } from '../services/session/manager';
-import { SESSION_COOKIE } from '../utils/cookies';
+import { getSessionUser } from '../services/session';
+import { SESSION_COOKIE } from '../lib/cookies';
 
 export function getSessionId(req: Request): string | undefined {
   return req.cookies?.[SESSION_COOKIE];

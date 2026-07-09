@@ -1,7 +1,6 @@
-import { env } from '../../config/env';
-import { SPOTIFY_TOKEN_URL, SPOTIFY_API_BASE } from '../../config/spotify';
+import { env, SPOTIFY_TOKEN_URL, SPOTIFY_API_BASE } from '../config/env';
 import type { UserProfile } from '@music-mixer/shared';
-import { fetchWithRetry } from '../../utils/fetch';
+import { fetchWithRetry } from '../lib/fetch';
 
 export interface SpotifyTokenResponse {
   access_token: string;
@@ -16,34 +15,6 @@ interface SpotifyUserResponse {
   display_name: string;
   images: { url: string }[];
 }
-
-export async function getClientCredentialsToken(): Promise<string> {
-  const credentials = Buffer.from(
-    `${env.spotify.clientId()}:${env.spotify.clientSecret()}`,
-  ).toString('base64');
-
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-  });
-
-  const res = await fetchWithRetry(SPOTIFY_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Spotify client credentials exchange failed: ${err}`);
-  }
-
-  const data = await res.json() as SpotifyTokenResponse;
-  return data.access_token;
-}
-
 
 export async function exchangeCodeForTokens(code: string): Promise<SpotifyTokenResponse> {
   const credentials = Buffer.from(

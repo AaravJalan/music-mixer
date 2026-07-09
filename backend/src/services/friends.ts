@@ -1,6 +1,7 @@
-import type { UserProfile } from '@music-mixer/shared';
+import type { Friend, UserProfile } from '@music-mixer/shared';
 import { v4 as uuidv4 } from 'uuid';
-import { env } from '../../config/env';
+import { env } from '../config/env';
+import { ghostToUserProfile, isGhostUserId, listGhostProfiles } from './ghosts';
 
 interface FriendInvite {
   fromUserId: string;
@@ -62,4 +63,20 @@ export function areFriends(userA: string, userB: string): boolean {
 export function removeFriend(userId: string, friendId: string): void {
   friends.get(userId)?.delete(friendId);
   friends.get(friendId)?.delete(userId);
+}
+
+export async function getDefaultGhostFriends(): Promise<Friend[]> {
+  const ghosts = await listGhostProfiles();
+  return ghosts.map((ghost) => ({
+    user: ghostToUserProfile(ghost),
+    addedAt: '1970-01-01T00:00:00.000Z',
+    isGhost: true,
+  }));
+}
+
+export async function resolveFriendProfile(userId: string): Promise<UserProfile | null> {
+  if (!isGhostUserId(userId)) return null;
+  const ghosts = await listGhostProfiles();
+  const ghost = ghosts.find((g) => g.id === userId);
+  return ghost ? ghostToUserProfile(ghost) : null;
 }

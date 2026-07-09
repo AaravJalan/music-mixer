@@ -7,9 +7,9 @@ import type {
 } from '@music-mixer/shared';
 import { AUDIO_FEATURE_KEYS, PLAYLIST_MATCH_THRESHOLD, SPOTIFY_SEARCH_LIMIT } from '@music-mixer/shared';
 import type { AudioFeatureDimension } from '@music-mixer/shared';
-import { resolveAnchorGenre } from './featureEstimate';
-import { applyLinguisticVetoToPools } from './linguisticVeto';
-import { normalizeArtistName } from '../../math/sharedArtists';
+import { resolveAnchorGenre } from './genreModel';
+import { applyLinguisticVetoToPools } from './veto';
+import { normalizeArtistName } from '../math/sharedArtists';
 import { spotifyFetch, SpotifyApiError } from './client';
 import type { TopTrack } from './tracks';
 
@@ -21,10 +21,6 @@ import type { TopTrack } from './tracks';
 
 interface SpotifySearchResponse {
   tracks: { items: SpotifyTrackItem[] };
-}
-
-interface SpotifyArtistTopTracksResponse {
-  tracks: SpotifyTrackItem[];
 }
 
 interface SpotifyTrackItem {
@@ -428,17 +424,6 @@ function collectTopPerformingGenres(genreStatPools: GenreStat[][], perUser = 3):
 }
 
 /**
- * Genre-only search queries. Artist relevance is sourced deterministically by ID via
- * fetchArtistTopTracks (exact-entity endpoint), so we never anchor search on an artist
- * name — this is what previously allowed the "wrong Pritam" to leak into results.
- */
-function buildGenreQueries(genreStatPools: GenreStat[][]): string[] {
-  const searchable = resolveSearchableGenres(genreStatPools);
-  const genres = searchable.length > 0 ? searchable : ['pop'];
-  return genres.slice(0, 3).map(buildGenreQuery);
-}
-
-/**
  * Deterministic identity index for trusted artists. Matching is keyed on Spotify artist
  * IDs first (unique entity URIs); normalized names are only a fallback for sources that
  * lack IDs (e.g. embedded ghost tracks).
@@ -776,55 +761,14 @@ function buildSearchGenres(midpointVector: AudioFeatureVector, genreHints: strin
   return [...new Set([...fromHints, ...dominant, 'pop'])].slice(0, 5);
 }
 
-function normalizePoolWeights(weights: number[], poolCount: number): number[] {
-  const slice = weights.slice(0, poolCount);
-  while (slice.length < poolCount) slice.push(1);
-  const total = slice.reduce((sum, w) => sum + w, 0) || poolCount;
-  return slice.map((w) => w / total);
-}
-
-function allocateWeightedSlots(total: number, weights: number[]): number[] {
-  if (total <= 0 || weights.length === 0) return [];
-
-  const normalized = normalizePoolWeights(weights, weights.length);
-  const raw = normalized.map((w) => w * total);
-  const floors = raw.map((v) => Math.floor(v));
-  let remainder = total - floors.reduce((sum, n) => sum + n, 0);
-
-  const fractional = raw
-    .map((value, index) => ({ index, frac: value - floors[index] }))
-    .sort((a, b) => b.frac - a.frac);
-
-  for (const { index } of fractional) {
-    if (remainder <= 0) break;
-    floors[index] += 1;
-    remainder -= 1;
-  }
-
-  return floors;
-}
-
-const DISCOVERY_SEARCH_LIMIT = 10;
 /** Catalog depth sampling window for Spotify search offset (0–50). */
 const DISCOVERY_OFFSET_MAX = 50;
 
 /**
  * Discovery circuit breaker.
  *
- * The pipeline leans on two discovery endpoints across Stages 2–4 + backfill +
- * cultural-relax, and a single collision can fire 100+ calls. Two failure modes make that
- * catastrophic if we don't short-circuit:
- *
- *   • 403 Forbidden — `/artists/{id}/top-tracks` is deprecated for Development Mode apps,
- *     so every one of those calls is doomed.
- *   • 429 Rate limited — hammering `/search` gets the whole app put in a penalty box with a
- *     multi-hour `Retry-After`. Continuing to call it both wastes time AND keeps the ban
- *     alive so it never expires.
- *
- * On either signal we trip the breaker: subsequent discovery calls short-circuit (return
- * empty) for a cooldown, so the collision finishes instantly from local pools and the rate
- * limit is given room to recover. For a 429 we honor Spotify's Retry-After so we don't
- * probe again until the ban is actually up.
+ * Safe-Discovery caps `/search` calls per playlist build, but 403/429 still trip a global
+ * cooldown so collisions finish from local pools instead of hammering a blocked endpoint.
  */
 const DISCOVERY_BREAKER_COOLDOWN_MS = 60_000;
 /** Cap how long a single Retry-After can suspend discovery (avoid pinning for hours). */
@@ -1038,19 +982,6 @@ function rotate<T>(arr: T[], by: number): T[] {
   return [...arr.slice(n), ...arr.slice(0, n)];
 }
 
-/**
- * Deterministic ID-based artist sourcing. Fetches the exact entity's catalog via
- * `GET /v1/artists/{id}/top-tracks`, guaranteeing 100% identity accuracy (no risk of the
- * "wrong Pritam"). This is the reliable replacement for name-based `artist:"..."` search.
- */
-async function fetchArtistTopTracks(sessionId: string, artistId: string): Promise<RecommendationTrack[]> {
-  // Deprecated for Safe-Discovery mode (Dev Mode 403). Kept for reference only.
-  // See backend/dump/search_logic_deprecated.ts
-  void sessionId;
-  void artistId;
-  return [];
-}
-
 /** Chunked interleave: 2–3 tracks per participant per round for organic flow. */
 function chunkInterleave(
   pools: RecommendationTrack[][],
@@ -1084,98 +1015,6 @@ function chunkInterleave(
   return result;
 }
 
-/**
- * Proportional sourcing for one participant. Seeds from the participant's OWN top tracks
- * first (works offline and is what "Proportional Share" means — each person's real music),
- * then anchors on their top artists by ID (exact-entity top-tracks), then fills with
- * genre-only search. Never anchors search on artist names, to keep identity accuracy.
- */
-async function discoverParticipantTracks(
-  sessionId: string,
-  slotCount: number,
-  genreStatPools: GenreStat[][],
-  sharedArtists: { id: string; name: string }[],
-  artistPools: { id: string; name: string; genres?: string[] }[][],
-  state: PlaylistSeenState,
-  sessionSeed: number,
-  participantIndex: number,
-  ownTracks: TopTrack[] = [],
-): Promise<RecommendationTrack[]> {
-  if (slotCount <= 0) return [];
-
-  const trustedArtists = buildTrustedArtists(artistPools, sharedArtists);
-  const found: RecommendationTrack[] = [];
-  const poolCanonical = new Set<string>();
-  const targetPoolSize = slotCount * 3;
-
-  const consider = (track: RecommendationTrack): boolean => {
-    if (state.ids.has(track.id)) return false;
-    const key = getCanonicalKey(track);
-    if (state.seenTracks.has(key) || poolCanonical.has(key)) return false;
-    poolCanonical.add(key);
-    found.push(track);
-    return true;
-  };
-
-  // Seed from the participant's own top tracks first — no API needed, so proportional
-  // share still fills (and stays distinct from common-only) even when discovery is blocked.
-  for (const track of rotate(ownTracks, sessionSeed)) {
-    if (found.length >= targetPoolSize) break;
-    consider(topTrackToRecommendation(track));
-  }
-
-  // Safe-Discovery: do not call any network discovery here. Tier 2 in the main pipeline
-  // is allowed to perform at most one `/search` request for the entire playlist build.
-  void sessionId;
-  void genreStatPools;
-  void participantIndex;
-  void trustedArtists;
-
-  return found;
-}
-
-async function backfillUniqueTracks(
-  sessionId: string,
-  tracks: RecommendationTrack[],
-  targetLength: number,
-  state: PlaylistSeenState,
-  genreHints: string[],
-  sessionSeed: number,
-  trustedArtists?: TrustedArtists,
-): Promise<RecommendationTrack[]> {
-  const results = [...tracks];
-  if (results.length >= targetLength) return results.slice(0, targetLength);
-
-  let queryIndex = 0;
-  for (let attempt = 0; attempt < 8 && results.length < targetLength; attempt++) {
-    for (const genre of genreHints) {
-      if (results.length >= targetLength) break;
-      try {
-        const found = await searchTracks(
-          sessionId,
-          `genre:"${genre}"`,
-          DISCOVERY_SEARCH_LIMIT,
-          perQueryDiscoveryOffset(sessionSeed, 80 + queryIndex + attempt * 3),
-        );
-        queryIndex += 1;
-        const refined = trustedArtists
-          ? refineDiscoveredTracks(found, trustedArtists)
-          : found;
-        for (const track of refined) {
-          if (!isUniqueCandidate(track, state)) continue;
-          registerTrack(track, state);
-          results.push(track);
-          if (results.length >= targetLength) break;
-        }
-      } catch {
-        // skip failed search
-      }
-    }
-  }
-
-  return results.slice(0, targetLength);
-}
-
 function tryAddTrack(
   track: RecommendationTrack,
   state: PlaylistSeenState,
@@ -1190,173 +1029,6 @@ function tryAddTrack(
   registerTrack(track, state);
   results.push(track);
   return true;
-}
-
-/** Priority 2 — up to 5 exact-entity top tracks per shared artist (ID-based, deterministic). */
-async function fillSharedArtistSlots(
-  sessionId: string,
-  sharedArtists: { id: string; name: string }[],
-  state: PlaylistSeenState,
-  results: RecommendationTrack[],
-  targetLength: number,
-  trustedArtists: TrustedArtists,
-  sessionSeed: number,
-): Promise<void> {
-  for (const artist of sharedArtists) {
-    if (results.length >= targetLength) break;
-    if (!artist.id) continue;
-    const tracks = rotate(await fetchArtistTopTracks(sessionId, artist.id), sessionSeed);
-    let added = 0;
-    for (const track of tracks) {
-      if (added >= 5 || results.length >= targetLength) break;
-      if (tryAddTrack(track, state, results, targetLength, trustedArtists)) added += 1;
-    }
-  }
-}
-
-/**
- * Priority 3 — cultural-safe high-affinity genre intersection (genre-only queries).
- * Elastic Pipeline: if genre-specific queries return 0 results, automatically retries
- * with broader artist-only queries (dropping the genre restriction).
- */
-async function fillGenreIntersectionSlots(
-  sessionId: string,
-  genreStatPools: GenreStat[][],
-  artistPools: { id: string; name: string }[][],
-  state: PlaylistSeenState,
-  results: RecommendationTrack[],
-  targetLength: number,
-  trustedArtists: TrustedArtists,
-  sessionSeed: number,
-): Promise<void> {
-  const searchable = resolveSearchableGenres(genreStatPools);
-  const countBefore = results.length;
-  let queryIndex = 0;
-
-  for (const genre of searchable) {
-    if (results.length >= targetLength) break;
-    const query = buildGenreQuery(genre);
-    console.log(`Stage 3: Genre Search Query: ${query}`);
-    try {
-      const found = await searchTracks(
-        sessionId,
-        query,
-        DISCOVERY_SEARCH_LIMIT,
-        perQueryDiscoveryOffset(sessionSeed, 40 + queryIndex),
-      );
-      queryIndex += 1;
-      for (const track of refineDiscoveredTracks(found, trustedArtists)) {
-        if (tryAddTrack(track, state, results, targetLength, trustedArtists)) continue;
-        if (results.length >= targetLength) break;
-      }
-    } catch {
-      // skip failed genre search
-    }
-  }
-
-  // Elastic fallback: if genre intersection yielded 0 new tracks, broaden to
-  // artist-only queries (drop genre restriction) so the pipeline doesn't starve.
-  if (results.length === countBefore && results.length < targetLength) {
-    console.log('Stage 3: Genre intersection empty — falling back to artist-only search');
-    const allArtistIds = new Set<string>();
-    for (const pool of artistPools) {
-      for (const artist of pool) {
-        if (artist.id) allArtistIds.add(artist.id);
-      }
-    }
-    const artistIds = [...allArtistIds].slice(0, 6);
-    for (const artistId of artistIds) {
-      if (results.length >= targetLength) break;
-      const tracks = rotate(
-        await fetchArtistTopTracks(sessionId, artistId),
-        sessionSeed,
-      );
-      for (const track of refineDiscoveredTracks(tracks, trustedArtists)) {
-        if (tryAddTrack(track, state, results, targetLength, trustedArtists)) continue;
-        if (results.length >= targetLength) break;
-      }
-    }
-  }
-}
-
-async function fillProportionalDiscoverySlots(
-  input: PlaylistBuildInput,
-  state: PlaylistSeenState,
-  overlap: RecommendationTrack[],
-): Promise<RecommendationTrack[]> {
-  const {
-    sessionId,
-    trackPools,
-    artistPools,
-    genreStatPools,
-    sharedArtists,
-    targetLength,
-    blendWeights,
-    randomOffset,
-    genreHints,
-    centroidVector,
-  } = input;
-
-  const remaining = targetLength - overlap.length;
-
-  // Use the active weights to determine the search budget based on targetLength.
-  // Calculate exactly how many slots each participant gets BEFORE fetching.
-  const weights = blendWeights.length > 0 ? blendWeights : trackPools.map(() => 1);
-  const slots = allocateWeightedSlots(targetLength, weights);
-  console.log(`[Stage 4] Proportional Discovery Budget (Total ${targetLength}):`, slots);
-  const sessionSeed = discoverySessionSeed(randomOffset);
-  const trustedArtists = buildTrustedArtists(artistPools, sharedArtists);
-  const vetoedGenreStatPools = applyLinguisticVetoToGenreStats(genreStatPools, sharedArtists, weights);
-
-  const sourcedPools = await Promise.all(
-    trackPools.map((_, index) => {
-      const slotCount = slots[index] ?? 0;
-      if (slotCount <= 0) return Promise.resolve([] as RecommendationTrack[]);
-      return discoverParticipantTracks(
-        sessionId,
-        slotCount,
-        vetoedGenreStatPools,
-        sharedArtists,
-        artistPools,
-        state,
-        sessionSeed,
-        index,
-        trackPools[index] ?? [],
-      );
-    }),
-  );
-
-  const interleaved = refineDiscoveredTracks(
-    chunkInterleave(sourcedPools, weights, remaining, state),
-    trustedArtists,
-  );
-  const combined = [...overlap, ...interleaved];
-
-  if (combined.length >= targetLength) return combined.slice(0, targetLength);
-
-  const fillGenres = resolveSearchableGenres(vetoedGenreStatPools);
-  const fallbackGenres = fillGenres.length > 0 ? fillGenres : buildSearchGenres(centroidVector, genreHints);
-  return backfillUniqueTracks(
-    sessionId,
-    combined,
-    targetLength,
-    state,
-    fallbackGenres,
-    sessionSeed,
-    trustedArtists,
-  );
-}
-
-/**
- * Hierarchical Assembly Pipeline (Strict Intersection):
- * S1 Common Favorites → S2 Common Artist Top Tracks → S3 Shared Genre Search → S4 Fill
- *
- * The pipeline uses strict Set-based intersection at every stage. It never
- * returns a union. If match < 80% → equal_share (no midpoint blend). Cultural
- * genres are allowed when shared artists exist in those genres.
- */
-export async function generatePlaylist(input: PlaylistBuildInput): Promise<PlaylistBuildResult> {
-  return buildMultiCollisionPlaylist(input);
 }
 
 export async function buildMultiCollisionPlaylist(
@@ -1627,92 +1299,4 @@ export async function buildMultiCollisionPlaylist(
     effectiveMode,
     guardrailApplied,
   };
-}
-
-/**
- * Midpoint Blend tail: discover "bridge" tracks that sit at the sonic midpoint (centroid)
- * of the participants' tastes. Unlike proportional share (which sources each user's own
- * sound in weighted chunks), this leads with centroid-derived genre search so the result
- * leans toward shared middle ground. Proportional discovery is the safety net if the
- * bridge search can't fill the playlist (e.g. discovery rate-limited).
- */
-async function buildMidpointProportionalTail(
-  input: PlaylistBuildInput,
-  state: PlaylistSeenState,
-  seedTracks: RecommendationTrack[],
-): Promise<RecommendationTrack[]> {
-  const { sessionId, centroidVector, genreHints, targetLength, blendWeights, randomOffset, artistPools, sharedArtists } = input;
-  const trustedArtists = buildTrustedArtists(artistPools, sharedArtists);
-  const results = [...seedTracks];
-
-  if (results.length >= targetLength) return results.slice(0, targetLength);
-
-  const dominantIndex = blendWeights.length > 0
-    ? blendWeights.indexOf(Math.max(...blendWeights))
-    : -1;
-  const biasedHints = dominantIndex >= 0 && blendWeights[dominantIndex] >= 65
-    ? [...(input.genrePools[dominantIndex] ?? []).slice(0, 3), ...genreHints]
-    : genreHints;
-
-  // 1) Centroid genre bridge search — the defining behavior of Midpoint Blend.
-  const sessionSeed = discoverySessionSeed(randomOffset);
-  const searchable = resolveSearchableGenres(input.genreStatPools);
-  const bridgeGenres = searchable.length > 0
-    ? searchable
-    : buildSearchGenres(centroidVector, biasedHints);
-  let queryIndex = 0;
-  for (const genre of bridgeGenres) {
-    if (results.length >= targetLength) break;
-    const query = buildGenreQuery(genre);
-    try {
-      const found = await searchTracks(
-        sessionId,
-        query,
-        DISCOVERY_SEARCH_LIMIT,
-        perQueryDiscoveryOffset(sessionSeed, 50 + queryIndex),
-      );
-      queryIndex += 1;
-      for (const t of refineDiscoveredTracks(found, trustedArtists)) {
-        tryAddTrack(t, state, results, targetLength, trustedArtists);
-      }
-    } catch {
-      // skip
-    }
-  }
-
-  // 2) Safety net: if the bridge search couldn't fill (e.g. discovery blocked), fall back
-  // to proportional sourcing so Midpoint never returns a thinner playlist than Proportional.
-  if (results.length < targetLength) {
-    const proportional = await fillProportionalDiscoverySlots(input, state, results);
-    if (proportional.length > results.length) return proportional.slice(0, targetLength);
-  }
-
-  return results.slice(0, targetLength);
-}
-
-/** @deprecated Use buildMultiCollisionPlaylist(PlaylistBuildInput). */
-export async function buildCollisionPlaylist(
-  sessionId: string,
-  midpointVector: AudioFeatureVector,
-  tracksA: TopTrack[],
-  tracksB: TopTrack[],
-  genreHints: string[],
-  limit: number,
-  weights?: number[],
-): Promise<{ tracks: RecommendationTrack[]; usedFallback: true }> {
-  const result = await buildMultiCollisionPlaylist({
-    sessionId,
-    centroidVector: midpointVector,
-    trackPools: [tracksA, tracksB],
-    artistPools: [[], []],
-    genrePools: [[], []],
-    genreStatPools: [[], []],
-    sharedArtists: [],
-    genreHints,
-    targetLength: limit,
-    blendWeights: weights ?? [50, 50],
-    compatibilityScore: 1,
-    generationMode: 'midpoint',
-  });
-  return { tracks: result.tracks, usedFallback: true };
 }

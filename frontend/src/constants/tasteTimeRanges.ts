@@ -7,10 +7,6 @@ export const TASTE_TIME_RANGE_OPTIONS: { value: TasteTimeRange; label: string; s
   { value: 'long_term', label: 'All time', short: 'All' },
 ];
 
-export function tasteTimeRangeLabel(term: TasteTimeRange): string {
-  return TASTE_TIME_RANGE_OPTIONS.find((o) => o.value === term)?.label ?? term;
-}
-
 export const AUDIO_FEATURE_INFO: Record<string, { title: string; description: string }> = {
   danceability: {
     title: 'Danceability',

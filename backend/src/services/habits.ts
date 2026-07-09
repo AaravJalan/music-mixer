@@ -5,8 +5,8 @@ import type {
   TasteTimeRange,
 } from '@music-mixer/shared';
 import type { TopTrack } from '../spotify/tracks';
-import { estimateListeningHours } from '../../math/listening';
-import { buildUserTasteProfile } from '../spotify/vectorEngine';
+import { estimateListeningHours } from '../math/listening';
+import { buildUserTasteProfile } from '../spotify/taste';
 
 const DEFAULT_TRACK_MS = 3.5 * 60 * 1000;
 const GENRE_SLICE_LIMIT = 8;

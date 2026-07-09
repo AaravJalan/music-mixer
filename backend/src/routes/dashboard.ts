@@ -2,8 +2,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { TasteTimeRange } from '@music-mixer/shared';
 import { requireAuth } from '../middleware/auth';
-import { getDashboardAnalytics } from '../services/analytics/dashboard';
-import { getListeningHabits } from '../services/analytics/listeningHabits';
+import { getDashboardAnalytics } from '../services/dashboard';
+import { getListeningHabits } from '../services/habits';
 
 const router = Router();
 

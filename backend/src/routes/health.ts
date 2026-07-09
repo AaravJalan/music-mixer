@@ -1,15 +1,12 @@
 import { Router } from 'express';
 import { getMetricsSnapshot } from '../middleware/telemetry';
-import { audioFeatureCache } from '../services/cache/audioFeatures';
 
 const router = Router();
 
 router.get('/', (_req, res) => {
-  const cacheStats = audioFeatureCache.getStats();
   res.json({
     status: 'ok',
     service: 'music-mixer-api',
-    cache: cacheStats,
   });
 });
 

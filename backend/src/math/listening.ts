@@ -1,5 +1,5 @@
 import type { DashboardTopTrack, TasteTimeRange } from '@music-mixer/shared';
-import type { TopTrack } from '../services/spotify/tracks';
+import type { TopTrack } from '../spotify/tracks';
 
 const DEFAULT_TRACK_MS = 3.5 * 60 * 1000;
 

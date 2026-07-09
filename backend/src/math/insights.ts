@@ -6,9 +6,9 @@ import {
   computeWeightedTasteVector,
   resolveAnchorGenre,
   type WeightedGenre,
-} from '../services/spotify/featureEstimate';
-import type { ProfileArtist } from '../services/spotify/vectorEngine';
-import type { TopTrack } from '../services/spotify/tracks';
+} from '../spotify/genreModel';
+import type { ProfileArtist } from '../spotify/taste';
+import type { TopTrack } from '../spotify/tracks';
 
 const BROAD_ANCHORS = new Set(['pop', 'rock', 'electronic', 'edm', 'country', 'hip hop', 'rap', 'r&b']);
 
