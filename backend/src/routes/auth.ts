@@ -24,18 +24,9 @@ function safeRedirect(path: string | undefined): string {
   return path;
 }
 
-function getRedirectUri(req: Request): string {
-  const forwardedHost = req.headers['x-forwarded-host'];
-  if (forwardedHost) {
-    const proto = req.headers['x-forwarded-proto'] || req.protocol;
-    return `${proto}://${forwardedHost}/api/auth/callback`;
-  }
-
-  const host = req.headers.host || '';
-  if (host.includes('lambda-url') || host.includes('amazonaws.com')) {
-    return `https://${host}/api/auth/callback`;
-  }
-  return env.spotify.redirectUri();
+function getRedirectUri(origin: string): string {
+  // Always use the exact origin that initiated the request to ensure Spotify redirects back to the correct domain (e.g. Vercel)
+  return `${origin.replace(/\/$/, '')}/api/auth/callback`;
 }
 
 function authErrorRedirect(code: string, redirect?: string, origin?: string): string {
@@ -69,7 +60,7 @@ router.get('/login', async (req: Request, res: Response) => {
   const origin = typeof req.query.origin === 'string' ? req.query.origin : env.frontendUrl;
   const forceConsent = req.query.consent === '1' || req.query.force === '1';
   const state = await createOAuthState(redirect, origin);
-  const redirectUri = getRedirectUri(req);
+  const redirectUri = getRedirectUri(origin);
   res.redirect(buildAuthorizeUrl(state, redirectUri, forceConsent));
 });
 
@@ -94,7 +85,7 @@ router.get('/callback', async (req: Request, res: Response) => {
   const { redirect, origin } = stateEntry;
 
   try {
-    const redirectUri = getRedirectUri(req);
+    const redirectUri = getRedirectUri(origin || env.frontendUrl);
     const tokens = await exchangeCodeForTokens(code, redirectUri);
     const user = await fetchSpotifyProfile(tokens.access_token);
 
