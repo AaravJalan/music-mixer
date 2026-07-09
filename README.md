@@ -595,12 +595,10 @@ Authenticated `spotifyFetch()` with automatic token refresh. Retries 429 only wh
 The backend API is designed to be deployed to AWS Lambda via **SST** (`npx sst deploy --stage production`).
 The frontend is a Vite SPA that can easily be hosted on Vercel.
 
-1. **Connect Repository:** Link your GitHub repo to a new Vercel project.
-2. **Framework Preset:** Select **Vite**.
-3. **Root Directory:** Set to `frontend`.
-4. **Build Command:** `npm run build`
-5. **Output Directory:** `dist`
-6. **Environment Variables:**
+1. **Import Project:** When you connect the repo, Vercel will detect multiple projects. Select the **`frontend`** project.
+2. **Framework Preset:** Vercel will auto-detect **Vite**.
+3. **Build Command:** Turn on the override toggle and set it to: `npm run build -w @music-mixer/shared && npm run build` (This ensures the shared package compiles before the frontend).
+4. **Environment Variables:**
    - Add `VITE_API_URL` and set it to your production SST Lambda API URL (e.g. `https://<api-id>.lambda-url.<region>.on.aws/api`).
 
 Vercel will handle the rest, building the `frontend` workspace and serving your static assets globally!
