@@ -12,6 +12,7 @@ interface SessionData {
 
 interface OAuthStateEntry {
   redirect: string;
+  origin?: string;
 }
 
 // ─── Key helpers ──────────────────────────────────────────────────────────────
@@ -27,19 +28,19 @@ const PROFILE_TTL = 604800;   // 7 days
 
 // ─── OAuth State ─────────────────────────────────────────────────────────────
 
-export async function createOAuthState(redirect: string): Promise<string> {
+export async function createOAuthState(redirect: string, origin?: string): Promise<string> {
   const state = uuidv4();
-  const entry: OAuthStateEntry = { redirect };
+  const entry: OAuthStateEntry = { redirect, origin };
   await redis.set(oauthStateKey(state), JSON.stringify(entry), { ex: OAUTH_STATE_TTL });
   return state;
 }
 
-export async function consumeOAuthState(state: string): Promise<string | null> {
+export async function consumeOAuthState(state: string): Promise<OAuthStateEntry | null> {
   const raw = await redis.getdel<string>(oauthStateKey(state));
   if (!raw) return null;
   try {
     const entry: OAuthStateEntry = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return entry.redirect ?? null;
+    return entry;
   } catch {
     return null;
   }

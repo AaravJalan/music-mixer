@@ -24,8 +24,8 @@ function safeRedirect(path: string | undefined): string {
   return path;
 }
 
-function authErrorRedirect(code: string, redirect?: string): string {
-  const base = `${env.frontendUrl}/?auth_error=${encodeURIComponent(code)}`;
+function authErrorRedirect(code: string, redirect?: string, origin?: string): string {
+  const base = `${origin || env.frontendUrl}/?auth_error=${encodeURIComponent(code)}`;
   if (redirect && redirect !== '/') {
     return `${base}&auth_redirect=${encodeURIComponent(redirect)}`;
   }
@@ -52,8 +52,9 @@ router.get('/login', async (req: Request, res: Response) => {
   }
 
   const redirect = safeRedirect(req.query.redirect as string | undefined);
+  const origin = typeof req.query.origin === 'string' ? req.query.origin : env.frontendUrl;
   const forceConsent = req.query.consent === '1' || req.query.force === '1';
-  const state = await createOAuthState(redirect);
+  const state = await createOAuthState(redirect, origin);
   res.redirect(buildAuthorizeUrl(state, forceConsent));
 });
 
@@ -70,11 +71,12 @@ router.get('/callback', async (req: Request, res: Response) => {
     return;
   }
 
-  const redirect = await consumeOAuthState(state);
-  if (!redirect) {
+  const stateEntry = await consumeOAuthState(state);
+  if (!stateEntry) {
     res.redirect(authErrorRedirect('invalid_state'));
     return;
   }
+  const { redirect, origin } = stateEntry;
 
   try {
     const tokens = await exchangeCodeForTokens(code);
@@ -82,7 +84,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     let refreshToken = tokens.refresh_token ?? (await getStoredRefreshToken(user.id));
     if (!refreshToken) {
-      res.redirect(authErrorRedirect('reconsent_required', redirect));
+      res.redirect(authErrorRedirect('reconsent_required', redirect, origin));
       return;
     }
 
@@ -93,22 +95,22 @@ router.get('/callback', async (req: Request, res: Response) => {
     });
 
     res.cookie(SESSION_COOKIE, sessionId, sessionCookieOptions());
-    res.redirect(`${env.frontendUrl}${redirect}`);
+    res.redirect(`${origin || env.frontendUrl}${redirect}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('OAuth callback error:', message, err instanceof Error ? err.cause : '');
 
     if (isNetworkError(err)) {
-      res.redirect(authErrorRedirect('network_error', redirect));
+      res.redirect(authErrorRedirect('network_error', redirect, origin));
       return;
     }
 
     if (message.includes('invalid_grant')) {
-      res.redirect(authErrorRedirect('expired_code', redirect));
+      res.redirect(authErrorRedirect('expired_code', redirect, origin));
       return;
     }
 
-    res.redirect(authErrorRedirect('callback_failed', redirect));
+    res.redirect(authErrorRedirect('callback_failed', redirect, origin));
   }
 });
 

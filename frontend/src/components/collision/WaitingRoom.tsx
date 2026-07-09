@@ -73,15 +73,7 @@ export function WaitingRoom({
           >
             <span className="text-xs font-semibold text-accent-purple uppercase tracking-wider">Mix</span>
           </motion.div>
-          {bothPresent && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 w-6 h-6 bg-accent-green rounded-full flex items-center justify-center text-[10px] font-bold"
-            >
-              OK
-            </motion.div>
-          )}
+
         </div>
 
         <div className="flex flex-col items-center gap-2">

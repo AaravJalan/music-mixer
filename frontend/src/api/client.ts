@@ -46,6 +46,7 @@ export const api = {
     const params = new URLSearchParams();
     if (redirect) params.set('redirect', redirect);
     if (options?.forceConsent) params.set('consent', '1');
+    params.set('origin', window.location.origin);
     const qs = params.toString();
     window.location.href = `${BASE}/auth/login${qs ? `?${qs}` : ''}`;
   },
