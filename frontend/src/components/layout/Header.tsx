@@ -13,9 +13,7 @@ export function Header({ user, onLogout }: HeaderProps) {
     <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5">
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-pink to-accent-purple flex items-center justify-center text-sm font-bold">
-            M
-          </div>
+          <img src="/favicon.svg" alt="MusicMixer Logo" className="w-8 h-8 drop-shadow-lg" />
           <span className="font-semibold text-lg">MusicMixer</span>
         </Link>
 
