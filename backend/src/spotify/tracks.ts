@@ -95,7 +95,7 @@ function yearStartTimestamp(): number {
  * Year-to-date profile from recently played (requires user-read-recently-played scope).
  * Paginates with `before` cursor; ranks tracks by play frequency since Jan 1.
  */
-export async function fetchYearToDateTracks(sessionId: string): Promise<TopTrack[]> {
+async function fetchYearToDateTracks(sessionId: string): Promise<TopTrack[]> {
   const after = yearStartTimestamp();
   const playCounts = new Map<string, { track: TopTrack; count: number }>();
   let before: string | undefined;

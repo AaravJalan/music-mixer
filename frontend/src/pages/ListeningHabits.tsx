@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { Card } from '../components/ui/Card';
 import { GenrePie } from '../components/dashboard/GenrePie';
 import { ListeningLineChart } from '../components/dashboard/ListeningLineChart';
+import { GenreTrendChart } from '../components/dashboard/GenreTrendChart';
 import { TASTE_TIME_RANGE_OPTIONS } from '../constants/tasteTimeRanges';
 
 interface ListeningHabitsPageProps {
@@ -85,27 +86,50 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
           animate={{ opacity: loading ? 0.5 : 1, y: 0 }}
           className="space-y-6"
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Card className="py-4 px-5">
               <p className="text-[11px] uppercase tracking-wider text-white/40">Total Listening</p>
               <p className="text-2xl font-bold text-gradient mt-1">{formatHours(data.totalListeningHours)}h</p>
               <p className="text-[11px] text-white/35 mt-0.5">since account inception</p>
             </Card>
+            
             <Card className="py-4 px-5">
-              <p className="text-[11px] uppercase tracking-wider text-white/40">Tracks Analyzed</p>
-              <p className="text-2xl font-bold text-gradient mt-1">{data.totalTracks.toLocaleString()}</p>
-              <p className="text-[11px] text-white/35 mt-0.5">across your library</p>
+              <p className="text-[11px] uppercase tracking-wider text-white/40">Recent Activity</p>
+              <p className="text-2xl font-bold text-gradient mt-1">{formatHours(data.totalListeningHoursSinceTracking)}h</p>
+              <p className="text-[11px] text-white/35 mt-0.5">
+                {data.firstTrackedDate ? `since ${data.firstTrackedDate}` : 'No tracking history yet'}
+              </p>
             </Card>
-            <Card className="py-4 px-5 col-span-2 sm:col-span-1">
+
+            <Card className="py-4 px-5">
+              <p className="text-[11px] uppercase tracking-wider text-white/40">Tracked By Cron</p>
+              <p className="text-2xl font-bold text-gradient mt-1">{data.trackingCount}</p>
+              <p className="text-[11px] text-white/35 mt-0.5">historical snapshots</p>
+            </Card>
+
+            <Card className="py-4 px-5">
               <p className="text-[11px] uppercase tracking-wider text-white/40">Genres</p>
-              <p className="text-2xl font-bold text-gradient mt-1">{data.genreDistribution.length}</p>
+              <p className="text-2xl font-bold text-gradient mt-1">{data.genreDistribution?.length || 0}</p>
               <p className="text-[11px] text-white/35 mt-0.5">represented in your mix</p>
             </Card>
           </div>
 
           <Card glow="purple">
             <h2 className="text-lg font-semibold mb-4">Genre Distribution</h2>
-            <GenrePie slices={data.genreDistribution} />
+            <GenrePie slices={data.genreDistribution || []} />
+          </Card>
+          
+          <Card glow="cyan">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Historical Genre Trends</h2>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
+                Backed by DynamoDB
+              </span>
+            </div>
+            <GenreTrendChart trends={data.genreTrends || []} />
+            <p className="text-[11px] text-white/35 mt-3 text-center">
+              How your top genres evolved over {data.trackingCount || 0} tracking cycles.
+            </p>
           </Card>
 
           <Card glow="pink">
@@ -120,9 +144,9 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
                 </span>
               )}
             </div>
-            <ListeningLineChart points={data.dailyListening} />
+            <ListeningLineChart points={data.dailyListening || []} />
             <p className="text-[11px] text-white/35 mt-3">
-              Hours per day over the last {data.dailyListening.length} days.
+              Hours per day over the last {(data.dailyListening || []).length} days.
             </p>
           </Card>
         </motion.div>

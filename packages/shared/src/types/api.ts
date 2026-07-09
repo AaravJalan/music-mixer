@@ -199,6 +199,11 @@ export interface DailyListeningPoint {
   hours: number;
 }
 
+export interface GenreTrendPoint {
+  date: string;
+  percentages: Record<string, number>;
+}
+
 /** Listening Habits: genre distribution (pie) + accumulated volume / daily hours (line). */
 export interface ListeningHabitsResponse {
   term: TasteTimeRange;
@@ -212,6 +217,13 @@ export interface ListeningHabitsResponse {
   dailyListening: DailyListeningPoint[];
   /** True while the daily series is modeled; false once the tracking Lambda backs it. */
   dailyIsEstimated: boolean;
+  
+  // Historical tracking fields from DynamoDB Cron
+  totalListeningHoursSinceTracking: number;
+  trackingCount: number;
+  firstTrackedDate: string | null;
+  genreTrends: GenreTrendPoint[];
+  
   platform: 'spotify';
   cachedAt?: string;
 }

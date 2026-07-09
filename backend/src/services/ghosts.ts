@@ -1,9 +1,6 @@
 import type { GhostProfile, GenreStat } from '@music-mixer/shared';
 import type { ProfileArtist } from '../spotify/taste';
-import { loadJsonFile } from '../lib/persist';
-
-const GHOST_FILE = 'ghost-profiles.json';
-
+import ghostProfilesData from '../mock/ghost-profiles.json';
 interface GhostDefinition {
   id: string;
   displayName: string;
@@ -104,7 +101,7 @@ function normalizeGhost(raw: Record<string, any>, base: GhostDefinition | undefi
 }
 
 function loadGhosts(): GhostProfile[] {
-  const fromFile = loadJsonFile<Record<string, any>[]>(GHOST_FILE, []);
+  const fromFile = ghostProfilesData as Record<string, any>[];
   const fileById = new Map<string, Record<string, any>>(
     (Array.isArray(fromFile) ? fromFile : []).filter((g) => g?.id).map((g) => [g.id, g]),
   );

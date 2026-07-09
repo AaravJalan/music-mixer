@@ -20,7 +20,7 @@ export function CollisionPage({ user }: CollisionPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
-    collision, result, metrics, loading, running, error,
+    collision, result, loading, running, error,
     settings, run, join, updateSettings,
   } = useCollision(id);
 
@@ -45,7 +45,7 @@ export function CollisionPage({ user }: CollisionPageProps) {
 
   if (result || collision.status === 'complete') {
     if (!result) return <div className="text-center text-white/50">Loading results...</div>;
-    return <Results result={result} metrics={metrics ?? undefined} onReset={() => navigate('/')} />;
+    return <Results result={result} onReset={() => navigate('/')} />;
   }
 
   if (!user) {

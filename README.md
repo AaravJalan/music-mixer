@@ -12,7 +12,7 @@ npm run dev
 | Service | URL |
 |---------|-----|
 | Frontend | `http://127.0.0.1:5173` |
-| Backend API | `http://127.0.0.1:3001/api` |
+| Backend API | `http://127.0.0.1:3001/api` (Local Express) or `https://<api-id>.lambda-url.<region>.on.aws` (SST Lambda) |
 
 Use `http://127.0.0.1:5173` (not `localhost`) for Spotify OAuth cookie consistency.
 
@@ -20,7 +20,7 @@ Use `http://127.0.0.1:5173` (not `localhost`) for Spotify OAuth cookie consisten
 
 ```bash
 npm run build
-# 1. @music-mixer/shared → 2. backend → 3. frontend
+# Builds @music-mixer/shared, then backend (tsc), then frontend (tsc + vite)
 ```
 
 ### Environment
@@ -32,8 +32,10 @@ Create `.env` at the repo root (see `.env.example`):
 | `SPOTIFY_CLIENT_ID` | Yes | — |
 | `SPOTIFY_CLIENT_SECRET` | Yes | — |
 | `SPOTIFY_REDIRECT_URI` | Yes | — |
-| `PORT` | No | `3001` |
+| `PORT` | No | `3001` (For local Express) |
 | `FRONTEND_URL` | No | `http://127.0.0.1:5173` |
+| `UPSTASH_REDIS_REST_URL` | Yes | — |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes | — |
 
 ---
 
@@ -84,7 +86,7 @@ Create `.env` at the repo root (see `.env.example`):
 
 - Friend invites via shareable code
 - Five built-in ghost personas for sandbox testing
-- Ghost track data hydrated from `backend/.data/ghost-profiles.json`
+- Ghost track data statically bundled from `backend/src/mock/ghost-profiles.json`
 
 ### Spotify export
 
@@ -97,17 +99,17 @@ Create `.env` at the repo root (see `.env.example`):
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         Frontend (React + Vite)                         │
-│  Port 5173 · Proxy /api → 127.0.0.1:3001 · HTTP-only session cookie     │
+│  Port 5173 · HTTP-only session cookie (or local proxy to API)           │
 └───────────────────────────────────┬─────────────────────────────────────┘
                                     │ REST + credentials
 ┌───────────────────────────────────▼─────────────────────────────────────┐
-│                      Backend (Express + TypeScript)                     │
-│  Port 3001 · Routes · Middleware · Collision · Spotify · Math           │
+│                      Backend API (AWS Lambda)                           │
+│  SST v3 · Express via serverless-http · Collision · Spotify · Math      │
 └───────────┬─────────────────────────────┬─────────────────────────────┘
             │                             │
 ┌───────────▼──────────┐      ┌───────────▼──────────────────────────────┐
-│  @music-mixer/shared │      │  File persistence (backend/.data/*.json)   │
-│  Types · Constants   │      │  Sessions · History · Ghosts · Caches      │
+│  @music-mixer/shared │      │  DynamoDB + SQS + Upstash Redis          │
+│  Types · Constants   │      │  Sessions · History · Caches · Habits    │
 └──────────────────────┘      └────────────────────────────────────────────┘
                                           │
                               ┌───────────▼──────────┐
@@ -130,11 +132,12 @@ Create `.env` at the repo root (see `.env.example`):
 | Layer | Technology |
 |-------|------------|
 | Language | TypeScript 5.7 |
-| Backend | Node.js, Express 4, tsx |
+| Backend | AWS Lambda + serverless-http (deployed via SST v3) |
+| Local API | Node.js, Express 4, tsx (via `local.ts`) |
 | Frontend | React 18, Vite 6, Tailwind 3, Framer Motion |
 | Router | React Router 7 |
 | Monorepo | npm workspaces (`packages/shared`, `backend`, `frontend`) |
-| Persistence | JSON files in `backend/.data/` |
+| Persistence| AWS DynamoDB (Habits), Upstash Redis (Sessions/Caches) |
 | Auth | Spotify OAuth 2.0, HTTP-only `mm_session` cookie |
 
 ---
@@ -144,7 +147,7 @@ Create `.env` at the repo root (see `.env.example`):
 ```
 music-mixer/
 ├── package.json
-├── scripts/kill-dev-ports.mjs
+├── sst.config.ts                 # Infrastructure as Code (AWS via SST v3)
 ├── packages/shared/              # @music-mixer/shared types & constants
 ├── backend/
 │   ├── src/
@@ -155,9 +158,11 @@ music-mixer/
 │   │   ├── math/                 # vectors, similarity, genres, insights
 │   │   ├── collision/            # engine, store, history
 │   │   ├── spotify/              # auth, client, tracks, taste, genreModel, build, veto, export
-│   │   └── services/             # session, friends, ghosts, dashboard, habits
-│   ├── scripts/generateGhosts.ts
-│   └── .data/                    # Runtime JSON (gitignored)
+│   │   ├── services/             # session, friends, ghosts, dashboard, habits
+│   │   ├── workers/              # AWS Lambda queue processors and cron jobs
+│   │   ├── lambda.ts             # AWS Lambda entrypoint for Express
+│   │   └── local.ts              # Local Express development entrypoint
+│   └── scripts/generateGhosts.ts
 └── frontend/src/
     ├── api/client.ts
     ├── components/               # collision, dashboard, layout, ui
@@ -519,7 +524,7 @@ Home → create collision → WaitingRoom → CollisionSettings → Run → Resu
 | `ghost-pop-princess` | The Pop Princess | Dance Pop |
 | `ghost-bollywood-buff` | The Bollywood Buff | Filmi & Desi Pop |
 
-Track data lives in `backend/.data/ghost-profiles.json`, hydrated via:
+Track data lives in `backend/src/mock/ghost-profiles.json`, updated via:
 
 ```bash
 npm run generate:ghosts -w backend
@@ -529,23 +534,14 @@ npm run generate:ghosts -w backend
 
 ## Data persistence
 
-### File-based (`backend/.data/`)
+### Cloud Infrastructure (AWS + Upstash)
 
-| File | Contents |
+| Store | Purpose |
 |------|----------|
-| `sessions.json` | Active sessions + tokens |
-| `oauth-states.json` | OAuth CSRF states |
-| `refresh-tokens.json` | Per-user refresh tokens |
-| `profiles.json` | Cached user profiles |
-| `ghost-profiles.json` | Ghost track/artist data |
-| `collision-history.json` | History index (max 50 per user) |
-| `collision-snapshots.json` | Full collision snapshots |
-| `artist-cache.json` | Artist ID → genres |
-| `dashboard-cache.json` | Dashboard response cache |
+| **Upstash Redis** | Active sessions, OAuth states, refresh tokens, cached user profiles |
+| **AWS DynamoDB** | `ListeningHabits` table for daily snapshots + SQS for non-blocking writes |
+| **Memory** | Active collisions, rate limiter buckets, discovery cache |
 
-### In-memory (session lifetime)
-
-Active collisions, friend graph, rate limiter buckets, discovery cache, listening habits cache.
 
 ---
 
@@ -587,9 +583,27 @@ Authenticated `spotifyFetch()` with automatic token refresh. Retries 429 only wh
 
 | Script | Purpose |
 |--------|---------|
-| `npm run dev` | Start backend + frontend (kills ports 3001/5173 first) |
+| `npx sst dev` | Start local backend infrastructure via SST + Express |
+| `npm run dev --workspace=frontend` | Start local Vite server for frontend |
 | `npm run build` | Build all workspaces |
 | `npm run generate:ghosts -w backend` | Hydrate ghost profiles from Spotify playlists |
+
+---
+
+## Deploying to Vercel
+
+The backend API is designed to be deployed to AWS Lambda via **SST** (`npx sst deploy --stage production`).
+The frontend is a Vite SPA that can easily be hosted on Vercel.
+
+1. **Connect Repository:** Link your GitHub repo to a new Vercel project.
+2. **Framework Preset:** Select **Vite**.
+3. **Root Directory:** Set to `frontend`.
+4. **Build Command:** `npm run build`
+5. **Output Directory:** `dist`
+6. **Environment Variables:**
+   - Add `VITE_API_URL` and set it to your production SST Lambda API URL (e.g. `https://<api-id>.lambda-url.<region>.on.aws/api`).
+
+Vercel will handle the rest, building the `frontend` workspace and serving your static assets globally!
 
 ---
 

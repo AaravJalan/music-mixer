@@ -12,6 +12,8 @@
     "unlock": "curl -s -X POST \"$UPSTASH_REDIS_REST_URL/del/status:api_lock\" -H \"Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN\" && echo ''"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1084.0",
+    "@aws-sdk/lib-dynamodb": "^3.1084.0",
     "@music-mixer/shared": "*",
     "@upstash/redis": "^1.34.9",
     "cookie-parser": "^1.4.7",
@@ -22,6 +24,7 @@
     "uuid": "^11.0.5"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.162",
     "@types/cookie-parser": "^1.4.8",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",

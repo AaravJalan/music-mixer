@@ -2,7 +2,7 @@ import type { UserProfile } from '@music-mixer/shared';
 import { Avatar } from '../ui/Avatar';
 import { redistributeParticipantWeight } from '../../utils/participantWeights';
 
-export interface WeightParticipant {
+interface WeightParticipant {
   id: string;
   label: string;
   user?: UserProfile;

@@ -45,7 +45,7 @@ function isNicheGenre(genre: string): boolean {
   return anchor === 'default' || !BROAD_ANCHORS.has(anchor);
 }
 
-export function computeNicheScore(weightedGenres: WeightedGenre[]): number {
+function computeNicheScore(weightedGenres: WeightedGenre[]): number {
   if (weightedGenres.length === 0) return 0;
 
   let nicheWeight = 0;
@@ -66,7 +66,7 @@ function trackGenres(track: TopTrack, artistGenreMap: Map<string, string[]>): st
   return [...new Set(genres)];
 }
 
-export function computeMoodConsistencyIndex(
+function computeMoodConsistencyIndex(
   tracks: TopTrack[],
   artistGenreMap: Map<string, string[]>,
 ): number {

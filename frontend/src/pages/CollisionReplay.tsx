@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import type { CollisionHistorySnapshot, CollisionResult, MetricsSnapshot, PlaylistGenerationMode, PlaylistLengthMode, TasteTimeRange } from '@music-mixer/shared';
+import type { CollisionHistorySnapshot, CollisionResult, PlaylistGenerationMode, PlaylistLengthMode, TasteTimeRange } from '@music-mixer/shared';
 import { PLAYLIST_MATCH_THRESHOLD } from '@music-mixer/shared';
 import { api } from '../api/client';
 import { Results } from '../components/collision/Results';
@@ -14,7 +14,6 @@ export function CollisionReplayPage() {
   const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<CollisionHistorySnapshot | null>(null);
   const [result, setResult] = useState<CollisionResult | null>(null);
-  const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
   const [settings, setSettings] = useState({
     userAWeight: 50,
     userBWeight: 50,
@@ -64,7 +63,7 @@ export function CollisionReplayPage() {
     setRunning(true);
     setError(null);
     try {
-      const { result: r, metrics: m } = await api.rerunCollision(id, {
+      const { result: r } = await api.rerunCollision(id, {
         userAWeight: settings.userAWeight,
         userBWeight: settings.userBWeight,
         playlistLength: settings.playlistLength,
@@ -75,7 +74,6 @@ export function CollisionReplayPage() {
         playlistGenerationMode: settings.playlistGenerationMode,
       });
       setResult(r);
-      setMetrics(m);
       if (r.similarityScore < PLAYLIST_MATCH_THRESHOLD) {
         setSettings((prev) =>
           prev.playlistGenerationMode === 'midpoint'
@@ -179,7 +177,6 @@ export function CollisionReplayPage() {
 
       <Results
         result={result}
-        metrics={metrics ?? undefined}
         onReset={() => navigate('/collisions')}
         resetLabel="Back to past collisions"
         canRegenerate={false}

@@ -7,6 +7,9 @@ import type {
 import type { TopTrack } from '../spotify/tracks';
 import { estimateListeningHours } from '../math/listening';
 import { buildUserTasteProfile } from '../spotify/taste';
+import { getListeningTrends } from './db';
+import { getSessionUser } from './session';
+import { getGhostProfile, isGhostUserId, ghostGenresToStats } from './ghosts';
 
 const DEFAULT_TRACK_MS = 3.5 * 60 * 1000;
 const GENRE_SLICE_LIMIT = 8;
@@ -122,12 +125,37 @@ export async function getListeningHabits(
     return { ...cached.data, cachedAt: new Date(cached.at).toISOString() };
   }
 
-  const profile = await buildUserTasteProfile(sessionId, term, 50);
+  const realUserId = userId ?? (await getSessionUser(sessionId))?.id;
+
+  let profile: any;
+  if (realUserId && isGhostUserId(realUserId)) {
+    const ghost = getGhostProfile(realUserId);
+    if (!ghost) throw new Error('Ghost profile not found');
+    
+    // Create a mock profile from ghost data
+    profile = {
+      tracks: ghost.tracks || [],
+      genres: ghostGenresToStats(ghost.genres || []),
+      artistGenreMap: new Map(),
+    };
+  } else {
+    profile = await buildUserTasteProfile(sessionId, term, 50);
+  }
 
   const genreDistribution = computeGenreDistribution(profile.tracks, profile.artistGenreMap);
 
+  // If it's a ghost profile, we might not have enough tracks for computeGenreDistribution
+  // So fallback to ghostGenresToStats if empty
+  const finalGenreDistribution = genreDistribution.length > 0 
+    ? genreDistribution 
+    : (profile.genres || []).map((g: any) => ({
+        genre: g.genre,
+        percentage: g.percentage,
+        trackCount: g.count
+      }));
+
   // Listening Volume: accumulated duration from account inception (long-term play model).
-  const durationsMs = profile.tracks.map((t) => t.durationMs ?? DEFAULT_TRACK_MS);
+  const durationsMs = profile.tracks.map((t: any) => t.durationMs ?? DEFAULT_TRACK_MS);
   const totalListeningHours = estimateListeningHours('long_term', durationsMs);
   const totalListeningMs = Math.round(totalListeningHours * 3_600_000);
 
@@ -138,14 +166,45 @@ export async function getListeningHabits(
 
   const response: ListeningHabitsResponse = {
     term,
-    genreDistribution,
+    genreDistribution: finalGenreDistribution,
     totalTracks: profile.tracks.length,
     totalListeningMs,
     totalListeningHours,
     dailyListening,
     dailyIsEstimated: true, // TODO(dynamodb): flip to false once tracking Lambda backs the series
+    totalListeningHoursSinceTracking: 0,
+    trackingCount: 0,
+    firstTrackedDate: null,
+    genreTrends: [],
     platform: 'spotify',
   };
+
+  // If we have a userId, let's fetch their historical trends from DynamoDB
+  if (realUserId) {
+    try {
+      const trends = await getListeningTrends(realUserId);
+      if (trends && trends.length > 0) {
+        // Sort trends by date ascending (oldest first) for charting
+        trends.sort((a, b) => a.date.localeCompare(b.date));
+        
+        response.trackingCount = trends.length;
+        response.firstTrackedDate = trends[0].date;
+        
+        // Calculate total listening hours since tracking started (sum of delta, or just max value)
+        // Since each snapshot is a cumulative estimate based on the term, we just sum them for now.
+        const totalMs = trends.reduce((acc, t) => acc + (t.totalListeningTimeMs || 0), 0);
+        response.totalListeningHoursSinceTracking = Math.round(totalMs / 3600000);
+        
+        // Map to GenreTrendPoint
+        response.genreTrends = trends.map(t => ({
+          date: t.date,
+          percentages: t.genrePercentages || {}
+        }));
+      }
+    } catch (err) {
+      console.error(`Failed to fetch listening trends for ${realUserId}:`, err);
+    }
+  }
 
   cache.set(cacheKey, { at: Date.now(), data: response });
   return response;

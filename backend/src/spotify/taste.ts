@@ -7,22 +7,7 @@ import { inferGenresFromArtistName, inferGenresFromText } from './inference';
 import { spotifyFetch } from './client';
 import { fetchTopTracks, resolveSpotifyTimeRange, type TopTrack } from './tracks';
 
-export type { MacroAdjustedSimilarity } from './genreModel';
-export {
-  computeMacroAdjustedSimilarity,
-  applyMacroPenalty,
-  macroPenaltyMultiplier,
-  type MacroCategory,
-  MACRO_CATEGORY_LABELS,
-  resolveMacroCategory,
-  macroDistanceMultiplier,
-} from './genreModel';
-export {
-  LANGUAGE_VETO_BUCKETS,
-  applyLinguisticVetoToPools,
-  applyVetoToParticipantGenres,
-  matchesRegionalBucket,
-} from './veto';
+
 
 interface SpotifyArtist {
   id: string;
@@ -40,7 +25,7 @@ interface SpotifyArtistsBatchResponse {
 }
 
 /** Batch-hydrate artist details (images + genres) from `/artists?ids=`. */
-export async function fetchArtistsBatch(
+async function fetchArtistsBatch(
   sessionId: string,
   ids: string[],
 ): Promise<Map<string, SpotifyArtist>> {

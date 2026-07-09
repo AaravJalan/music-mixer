@@ -16,7 +16,7 @@ function normalizeGenre(genre: string): string {
   return genre.toLowerCase().trim();
 }
 
-export function matchesRegionalBucket(genre: string, bucketKey?: string): boolean {
+function matchesRegionalBucket(genre: string, bucketKey?: string): boolean {
   const key = normalizeGenre(genre);
   if (bucketKey) {
     const patterns = LANGUAGE_VETO_BUCKETS[bucketKey] ?? [];
@@ -62,7 +62,7 @@ function filterOutBucket(genres: string[], bucketKey: string): string[] {
  * Veto regional search genres for participant A when others have zero presence
  * in A's dominant regional bucket and A has non-regional fallbacks.
  */
-export function applyVetoToParticipantGenres(
+function applyVetoToParticipantGenres(
   genresA: string[],
   otherGenrePools: string[][],
 ): string[] {

@@ -7,7 +7,7 @@ export function toDenseVector(v: AudioFeatureVector): number[] {
 }
 
 /** Compute the arithmetic mean of N feature vectors (centroid in R^6). */
-export function averageVectors(vectors: AudioFeatureVector[]): AudioFeatureVector {
+function averageVectors(vectors: AudioFeatureVector[]): AudioFeatureVector {
   if (vectors.length === 0) {
     throw new Error('Cannot average an empty set of vectors');
   }
@@ -29,7 +29,7 @@ export function averageVectors(vectors: AudioFeatureVector[]): AudioFeatureVecto
 }
 
 /** Component-wise weighted blend: m = wA·a + wB·b (weights normalized) */
-export function weightedBlend(
+function weightedBlend(
   a: AudioFeatureVector,
   b: AudioFeatureVector,
   weightA: number,
@@ -72,7 +72,7 @@ export function weightedCentroid(
 }
 
 /** Component-wise midpoint: m = (a + b) / 2 */
-export function midpoint(a: AudioFeatureVector, b: AudioFeatureVector): AudioFeatureVector {
+function midpoint(a: AudioFeatureVector, b: AudioFeatureVector): AudioFeatureVector {
   const result = {} as AudioFeatureVector;
   for (const key of AUDIO_FEATURE_KEYS) {
     result[key] = (a[key] + b[key]) / 2;

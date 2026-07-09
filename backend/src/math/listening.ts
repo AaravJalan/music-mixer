@@ -49,9 +49,3 @@ export function estimateListeningHoursFromTopTracks(
   return estimateListeningHours(term, tracks.map((t) => t.durationMs ?? DEFAULT_TRACK_MS));
 }
 
-export function estimateListeningHoursFromDashboardTracks(
-  tracks: DashboardTopTrack[],
-  term: TasteTimeRange = 'medium_term',
-): number {
-  return estimateListeningHours(term, tracks.map(() => DEFAULT_TRACK_MS));
-}

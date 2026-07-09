@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { CollisionResult, MetricsSnapshot, RecommendationTrack } from '@music-mixer/shared';
+import type { CollisionResult, RecommendationTrack } from '@music-mixer/shared';
 import { PLAYLIST_GENERATION_MODE_LABELS } from '@music-mixer/shared';
 import { api } from '../../api/client';
 import { Card } from '../ui/Card';
@@ -15,7 +15,6 @@ import { SharedArtistsList } from './SharedArtistsList';
 
 interface ResultsProps {
   result: CollisionResult;
-  metrics?: MetricsSnapshot;
   onReset: () => void;
   resetLabel?: string;
   /** Sandbox / custom flows that re-run generation outside the collision store. */
@@ -45,7 +44,6 @@ function formatPlaylistDuration(tracks: RecommendationTrack[]): string {
 
 export function Results({
   result: initialResult,
-  metrics,
   onReset,
   resetLabel = 'Start a new collision',
   onRegenerate,
@@ -289,20 +287,7 @@ export function Results({
         </Card>
       )}
 
-      {metrics && (
-        <Card className="text-center">
-          <div className="flex justify-center gap-8 text-sm">
-            <div>
-              <p className="text-2xl font-bold text-accent-cyan">{metrics.recommendationLatencyMs.toFixed(0)}ms</p>
-              <p className="text-white/40">Latency</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-accent-purple">{(metrics.cacheHitRate * 100).toFixed(0)}%</p>
-              <p className="text-white/40">Cache hits</p>
-            </div>
-          </div>
-        </Card>
-      )}
+
 
       <div className="text-center">
         <button type="button" onClick={onReset} className="text-white/50 hover:text-white text-sm underline">

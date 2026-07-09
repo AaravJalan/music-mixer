@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { refreshAccessToken } from '../spotify/auth';
 import { redis } from './redis/client';
 
-export interface SessionData {
+interface SessionData {
   user: UserProfile;
   refreshToken: string;
   accessToken: string;
@@ -72,7 +72,7 @@ export async function createSession(
   return sessionId;
 }
 
-export async function getSession(sessionId: string): Promise<SessionData | null> {
+async function getSession(sessionId: string): Promise<SessionData | null> {
   const raw = await redis.get<string>(sessionKey(sessionId));
   if (!raw) return null;
   try {
@@ -93,7 +93,7 @@ export async function destroySession(sessionId: string): Promise<void> {
 
 // ─── Profile Cache ────────────────────────────────────────────────────────────
 
-export async function cacheUserProfile(user: UserProfile): Promise<void> {
+async function cacheUserProfile(user: UserProfile): Promise<void> {
   await redis.set(profileKey(user.id), JSON.stringify({ ...user, platform: 'spotify' }), { ex: PROFILE_TTL });
 }
 

@@ -90,7 +90,6 @@ export function Home({ user }: HomeProps) {
     return (
       <Results
         result={sandboxResult.result}
-        metrics={sandboxResult.metrics}
         onReset={() => {
           setSandboxResult(null);
           setSandboxParams(null);

@@ -228,7 +228,7 @@ function uniqueOrdered<T>(arr: T[]): T[] {
   return out;
 }
 
-export function isRegionalGenre(genre: string): boolean {
+function isRegionalGenre(genre: string): boolean {
   const key = genre.toLowerCase().trim();
   return REGIONAL_GENRES.some((regional) => key.includes(regional) || regional.includes(key));
 }
@@ -348,7 +348,7 @@ function buildCulturalGuardrail(
  * high blend weight), regional genres will exist in the pools and should NOT be
  * stripped again here.
  */
-export function resolveSearchableGenres(genreStatPools: GenreStat[][]): string[] {
+function resolveSearchableGenres(genreStatPools: GenreStat[][]): string[] {
   const highAffinityShared = identifyHighAffinitySharedGenres(genreStatPools);
   const regionalAllowed = highAffinityShared.filter(isRegionalGenre);
   const globalFromIntersection = highAffinityShared.filter((g) => !isRegionalGenre(g));
@@ -385,7 +385,7 @@ function buildGenreQuery(genre: string): string {
 }
 
 /** Shared genres where every participant's affinity meets the high-affinity threshold. */
-export function identifyHighAffinitySharedGenres(genreStatPools: GenreStat[][]): string[] {
+function identifyHighAffinitySharedGenres(genreStatPools: GenreStat[][]): string[] {
   if (genreStatPools.length < 2) return [];
 
   const [first, ...rest] = genreStatPools;
@@ -576,7 +576,7 @@ export function resolvePlaylistBuildTargets(config: {
  * than the undershoot from stopping — so the playlist hugs the requested time instead
  * of always finishing short.
  */
-export function trimPlaylistToDuration(
+function trimPlaylistToDuration(
   tracks: RecommendationTrack[],
   targetMs: number,
 ): RecommendationTrack[] {
@@ -602,7 +602,7 @@ export function trimPlaylistToDuration(
 }
 
 /** Strips remix/version suffixes from a track title for canonical matching. */
-export function normalizeTrackTitle(name: string): string {
+function normalizeTrackTitle(name: string): string {
   let title = name.toLowerCase().trim();
   // Parenthetical suffixes: (Remix), (Elyanna Version), (feat. X), etc.
   title = title.replace(/\s*\([^)]*\)/g, '');

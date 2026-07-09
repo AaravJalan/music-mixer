@@ -44,7 +44,7 @@ export interface WeightedGenre {
   weight: number;
 }
 
-export type MacroCategory =
+type MacroCategory =
   | 'Macro_Electronic'
   | 'Macro_Rock'
   | 'Macro_HipHop'
@@ -97,7 +97,7 @@ const ADJACENT_PAIR_KEYS = new Set(
   ADJACENT_MACRO_PAIRS.map(([a, b]) => pairKey(a, b)),
 );
 
-export function resolveMacroCategory(genre: string): MacroCategory {
+function resolveMacroCategory(genre: string): string | null {
   const key = genre.toLowerCase().trim();
   if (!key) return 'Macro_Electronic';
 
@@ -121,7 +121,7 @@ export function resolveMacroCategory(genre: string): MacroCategory {
   return 'Macro_Electronic';
 }
 
-export function macroDistanceMultiplier(macroA: MacroCategory, macroB: MacroCategory): number {
+function macroDistanceMultiplier(macroA: MacroCategory, macroB: MacroCategory): number {
   if (macroA === macroB) return MACRO_MULTIPLIERS.same;
   if (ADJACENT_PAIR_KEYS.has(pairKey(macroA, macroB))) return MACRO_MULTIPLIERS.adjacent;
   return MACRO_MULTIPLIERS.distant;
@@ -176,12 +176,12 @@ export function computeWeightedTasteVector(weightedGenres: WeightedGenre[]): Aud
   return result;
 }
 
-export function dominantMacroCategory(genres: GenreStat[]): MacroCategory | null {
+function dominantMacroCategory(genres: GenreStat[]): MacroCategory | null {
   if (genres.length === 0) return null;
 
   const scores = new Map<MacroCategory, number>();
   for (const g of genres) {
-    const macro = resolveMacroCategory(g.genre);
+    const macro = resolveMacroCategory(g.genre) as MacroCategory;
     scores.set(macro, (scores.get(macro) ?? 0) + (g.percentage || g.count || 1));
   }
 
@@ -210,7 +210,7 @@ export function macroPenaltyMultiplier(genresA: GenreStat[], genresB: GenreStat[
   return macroDistanceMultiplier(macroA, macroB);
 }
 
-export function applyMacroPenalty(baseSimilarity: number, multiplier: number): number {
+function applyMacroPenalty(baseSimilarity: number, multiplier: number): number {
   return Math.min(1, Math.max(0, baseSimilarity * multiplier));
 }
 

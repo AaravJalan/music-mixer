@@ -29,4 +29,8 @@
   .glow-purple {
     box-shadow: 0 0 60px rgba(139, 92, 246, 0.15);
   }
+
+  .glow-cyan {
+    box-shadow: 0 0 60px rgba(34, 211, 238, 0.15);
+  }
 }
