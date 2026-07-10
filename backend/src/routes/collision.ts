@@ -307,7 +307,7 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
     const finalResult = { ...result, collisionId: id };
     await setCollisionComplete(id, finalResult);
     await recordCollisionHistory(stored.session.userA.id, finalResult, config.mode, config);
-    if (!ghostMode && stored.session.userB) {
+    if (!ghostMode && stored.session.userB && config.mode !== 'solo') {
       await recordCollisionHistory(stored.session.userB.id, finalResult, config.mode, config);
     }
     const metrics = getMetricsSnapshot(latency);

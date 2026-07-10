@@ -73,8 +73,8 @@ export function MobileNav() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/10">
-      <div className="flex">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/10 pb-safe">
+      <div className="flex overflow-x-auto no-scrollbar">
         {NAV_ITEMS.map((item) => {
           const active = item.isActive(pathname);
           return (
@@ -82,7 +82,7 @@ export function MobileNav() {
               key={item.id}
               to={item.to}
               className={[
-                'flex-1 py-3 text-[10px] text-center font-medium transition-colors',
+                'flex-shrink-0 px-5 py-3 text-[11px] text-center font-medium transition-colors whitespace-nowrap',
                 active ? 'text-accent-purple' : 'text-white/45',
               ].join(' ')}
             >
@@ -95,10 +95,21 @@ export function MobileNav() {
   );
 }
 
-export function MobileTopBar() {
+interface MobileTopBarProps {
+  user: UserProfile;
+  onLogout: () => void;
+}
+
+export function MobileTopBar({ user, onLogout }: MobileTopBarProps) {
   return (
-    <header className="md:hidden fixed top-0 left-0 right-0 z-40 glass border-b border-white/5 px-4 py-3">
+    <header className="md:hidden fixed top-0 left-0 right-0 z-40 glass border-b border-white/5 px-4 py-3 flex items-center justify-between">
       <span className="font-semibold text-sm">MusicMixer</span>
+      <div className="flex items-center gap-3">
+        <Avatar user={user} size="sm" />
+        <Button variant="ghost" size="sm" onClick={onLogout} className="!px-2 !py-1 text-[10px] h-auto">
+          Log out
+        </Button>
+      </div>
     </header>
   );
 }

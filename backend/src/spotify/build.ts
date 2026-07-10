@@ -982,7 +982,7 @@ function rotate<T>(arr: T[], by: number): T[] {
   return [...arr.slice(n), ...arr.slice(0, n)];
 }
 
-/** Chunked interleave: 2–3 tracks per participant per round for organic flow. */
+/** Proportional interleave: guarantees tracks match blend weights as closely as possible. */
 function chunkInterleave(
   pools: RecommendationTrack[][],
   weights: number[],
@@ -991,25 +991,100 @@ function chunkInterleave(
 ): RecommendationTrack[] {
   const result: RecommendationTrack[] = [];
   const indices = pools.map(() => 0);
-  const chunkSizes = weights.map((w) => (w >= 55 ? 3 : 2));
+  
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0) || pools.length;
+  const normalizedWeights = weights.map((w) => w / totalWeight);
 
-  while (result.length < limit) {
-    let addedAny = false;
-    for (let p = 0; p < pools.length; p++) {
-      for (let c = 0; c < chunkSizes[p] && result.length < limit; c++) {
-        while (indices[p] < pools[p].length) {
-          const track = pools[p][indices[p]++];
-          if (state.culturalGuardrail?.isBanned(track)) continue;
-          if (!isUniqueCandidate(track, state)) continue;
-          registerTrack(track, state);
-          // Tag which participant this track came from so the UI can color-code sources.
-          result.push({ ...track, sourceParticipantIndex: p });
-          addedAny = true;
-          break;
-        }
+  const targets = normalizedWeights.map((w) => Math.round(w * limit));
+  
+  let currentSum = targets.reduce((a, b) => a + b, 0);
+  while (currentSum < limit) {
+    let maxDeficit = -Infinity;
+    let maxIndex = 0;
+    for (let i = 0; i < pools.length; i++) {
+      const deficit = (normalizedWeights[i] * limit) - targets[i];
+      if (deficit > maxDeficit) {
+        maxDeficit = deficit;
+        maxIndex = i;
       }
     }
-    if (!addedAny) break;
+    targets[maxIndex]++;
+    currentSum++;
+  }
+  while (currentSum > limit) {
+    let maxSurplus = -Infinity;
+    let maxIndex = 0;
+    for (let i = 0; i < pools.length; i++) {
+      if (targets[i] === 0) continue;
+      const surplus = targets[i] - (normalizedWeights[i] * limit);
+      if (surplus > maxSurplus) {
+        maxSurplus = surplus;
+        maxIndex = i;
+      }
+    }
+    targets[maxIndex]--;
+    currentSum--;
+  }
+
+  const addedCount = pools.map(() => 0);
+  
+  while (result.length < limit) {
+    let bestPool = -1;
+    let maxScore = -Infinity;
+
+    for (let p = 0; p < pools.length; p++) {
+      if (addedCount[p] >= targets[p]) continue;
+      
+      let hasValidTrack = false;
+      let peekIndex = indices[p];
+      while (peekIndex < pools[p].length) {
+        const track = pools[p][peekIndex];
+        if (!state.culturalGuardrail?.isBanned(track) && isUniqueCandidate(track, state)) {
+          hasValidTrack = true;
+          break;
+        }
+        peekIndex++;
+      }
+      
+      if (!hasValidTrack) continue;
+
+      const expected = targets[p] === 0 ? 0 : (result.length + 1) * (targets[p] / limit);
+      const score = expected - addedCount[p];
+      
+      if (score > maxScore) {
+        maxScore = score;
+        bestPool = p;
+      }
+    }
+
+    if (bestPool === -1) {
+      let availablePools = false;
+      for (let p = 0; p < pools.length; p++) {
+        let peekIndex = indices[p];
+        while (peekIndex < pools[p].length) {
+          const track = pools[p][peekIndex];
+          if (!state.culturalGuardrail?.isBanned(track) && isUniqueCandidate(track, state)) {
+            availablePools = true;
+            targets[p]++;
+            break;
+          }
+          peekIndex++;
+        }
+      }
+      if (!availablePools) break;
+      continue;
+    }
+
+    while (indices[bestPool] < pools[bestPool].length) {
+      const track = pools[bestPool][indices[bestPool]++];
+      if (state.culturalGuardrail?.isBanned(track)) continue;
+      if (!isUniqueCandidate(track, state)) continue;
+      
+      registerTrack(track, state);
+      result.push({ ...track, sourceParticipantIndex: bestPool });
+      addedCount[bestPool]++;
+      break;
+    }
   }
 
   return result;

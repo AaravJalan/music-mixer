@@ -513,7 +513,7 @@ export async function runCollisionEngine(opts: CollisionEngineOptions): Promise<
 
   if (participantB.tracks.length === 0 || (soloMode && participantB.tracks.length < 3)) {
     if (soloMode) {
-      participantB = await profileToParticipant(sessionIdA, userA, config.userBWeight, 'short_term');
+      participantB = await profileToParticipant(sessionIdB, userB, config.userBWeight, 'medium_term');
     } else {
       throw new Error('Both users need top tracks — listen to more music on Spotify first');
     }

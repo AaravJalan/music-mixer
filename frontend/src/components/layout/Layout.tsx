@@ -21,7 +21,7 @@ export function Layout({ children, user, onLogout }: LayoutProps) {
       </div>
 
       {authenticated && user && <SidePanel user={user} onLogout={onLogout} />}
-      {authenticated && <MobileTopBar />}
+      {authenticated && user && <MobileTopBar user={user} onLogout={onLogout} />}
 
       <div className={authenticated ? 'md:pl-52' : ''}>
         {!authenticated && <Header user={user} onLogout={onLogout} />}
