@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-const DATA_DIR = path.resolve(__dirname, '../../.data');
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const DATA_DIR = isLambda ? '/tmp/.data' : path.resolve(__dirname, '../../.data');
 
 function ensureDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
