@@ -30,7 +30,7 @@ function TrackRow({
   sources?: TrackSource[];
 }) {
   const source =
-    track.sourceParticipantIndex != null && sources
+    !track.isCommon && track.sourceParticipantIndex != null && sources
       ? sources[track.sourceParticipantIndex]
       : undefined;
 
@@ -115,7 +115,14 @@ export function Playlist({ tracks, initialVisible = 12, sources }: PlaylistProps
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.03 }}
+            className="relative"
           >
+            {!track.isCommon && track.sourceParticipantIndex !== undefined && sources && sources[track.sourceParticipantIndex] ? (
+              <div
+                className="w-2 h-full absolute left-0 top-0 opacity-80"
+                style={{ backgroundColor: sources[track.sourceParticipantIndex].color }}
+              />
+            ) : null}
             <TrackRow track={track} index={i} sources={sources} />
           </motion.div>
         ))}

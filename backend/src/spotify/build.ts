@@ -1152,7 +1152,9 @@ export async function buildMultiCollisionPlaylist(
   
   const commonIds = new Set(exactOverlap.map(t => normalizeSpotifyId(t.id)));
 
-  if (effectiveMode !== 'equal_share') {
+  const isEqualWeights = input.blendWeights.length === 0 || new Set(input.blendWeights).size === 1;
+
+  if (effectiveMode !== 'equal_share' || isEqualWeights) {
     for (const track of exactOverlap) {
       tryAddTrackToBucket(track, results);
     }
