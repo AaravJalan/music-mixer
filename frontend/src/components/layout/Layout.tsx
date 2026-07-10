@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import type { UserProfile } from '@music-mixer/shared';
 import { Header } from './Header';
-import { MobileNav, MobileTopBar, SidePanel } from './SidePanel';
+import { MobileTopBar, SidePanel } from './SidePanel';
 
 interface LayoutProps {
   children: ReactNode;
@@ -35,7 +35,7 @@ export function Layout({ children, user, onLogout }: LayoutProps) {
         </main>
       </div>
 
-      {authenticated && <MobileNav />}
+
     </div>
   );
 }

@@ -983,11 +983,12 @@ function rotate<T>(arr: T[], by: number): T[] {
 }
 
 /** Proportional interleave: guarantees tracks match blend weights as closely as possible. */
-function chunkInterleave(
+export function chunkInterleave(
   pools: RecommendationTrack[][],
   weights: number[],
   limit: number,
   state: PlaylistSeenState,
+  commonIds?: Set<string>,
 ): RecommendationTrack[] {
   const result: RecommendationTrack[] = [];
   const indices = pools.map(() => 0);
@@ -1081,7 +1082,11 @@ function chunkInterleave(
       if (!isUniqueCandidate(track, state)) continue;
       
       registerTrack(track, state);
-      result.push({ ...track, sourceParticipantIndex: bestPool });
+      result.push({
+        ...track,
+        sourceParticipantIndex: bestPool,
+        isCommon: commonIds?.has(normalizeSpotifyId(track.id)) ?? false,
+      });
       addedCount[bestPool]++;
       break;
     }
@@ -1144,8 +1149,13 @@ export async function buildMultiCollisionPlaylist(
       return rec;
     })
   );
-  for (const track of exactOverlap) {
-    tryAddTrackToBucket(track, results);
+  
+  const commonIds = new Set(exactOverlap.map(t => normalizeSpotifyId(t.id)));
+
+  if (effectiveMode !== 'equal_share') {
+    for (const track of exactOverlap) {
+      tryAddTrackToBucket(track, results);
+    }
   }
   console.log(`Stage 1: Common Favorites — ${results.length} tracks`);
 
@@ -1259,7 +1269,7 @@ export async function buildMultiCollisionPlaylist(
       const pools = input.trackPools.map((pool) =>
         rotate(pool ?? [], sessionSeed).map(topTrackToRecommendation),
       );
-      const interleaved = chunkInterleave(pools, weights, remaining, state);
+      const interleaved = chunkInterleave(pools, weights, remaining, state, commonIds);
       // chunkInterleave already enforces uniqueness + registers into state.
       // Just append until we reach targetLength.
       results.push(...interleaved.slice(0, Math.max(0, targetLength - (searched.length + results.length))));

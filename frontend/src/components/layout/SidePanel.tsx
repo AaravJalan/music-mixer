@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { UserProfile } from '@music-mixer/shared';
 import { Avatar } from '../ui/Avatar';
@@ -69,47 +70,64 @@ export function SidePanel({ user, onLogout }: SidePanelProps) {
   );
 }
 
-export function MobileNav() {
-  const { pathname } = useLocation();
-
-  return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/10 pb-safe">
-      <div className="flex overflow-x-auto no-scrollbar">
-        {NAV_ITEMS.map((item) => {
-          const active = item.isActive(pathname);
-          return (
-            <Link
-              key={item.id}
-              to={item.to}
-              className={[
-                'flex-shrink-0 px-5 py-3 text-[11px] text-center font-medium transition-colors whitespace-nowrap',
-                active ? 'text-accent-purple' : 'text-white/45',
-              ].join(' ')}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
 interface MobileTopBarProps {
   user: UserProfile;
   onLogout: () => void;
 }
 
 export function MobileTopBar({ user, onLogout }: MobileTopBarProps) {
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+
   return (
-    <header className="md:hidden fixed top-0 left-0 right-0 z-40 glass border-b border-white/5 px-4 py-3 flex items-center justify-between">
-      <span className="font-semibold text-sm">MusicMixer</span>
-      <div className="flex items-center gap-3">
-        <Avatar user={user} size="sm" />
-        <Button variant="ghost" size="sm" onClick={onLogout} className="!px-2 !py-1 text-[10px] h-auto">
-          Log out
-        </Button>
-      </div>
-    </header>
+    <>
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 glass border-b border-white/5 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="p-1 -ml-1 text-white/70 hover:text-white"
+            aria-label="Toggle menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {open ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+          <span className="font-semibold text-sm">MusicMixer</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <Avatar user={user} size="sm" />
+          <Button variant="ghost" size="sm" onClick={onLogout} className="!px-2 !py-1 text-[10px] h-auto">
+            Log out
+          </Button>
+        </div>
+      </header>
+
+      {open && (
+        <div className="md:hidden fixed inset-0 z-40 bg-black/80 backdrop-blur-sm pt-16" onClick={() => setOpen(false)}>
+          <nav className="p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.id}
+                to={item.to}
+                onClick={() => setOpen(false)}
+                className={[
+                  'block px-4 py-3 rounded-lg text-base font-medium transition-colors',
+                  item.isActive(pathname)
+                    ? 'bg-accent-purple/20 text-white border border-accent-purple/30'
+                    : 'text-white/70 hover:bg-white/10 hover:text-white border border-transparent',
+                ].join(' ')}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      )}
+    </>
   );
 }
