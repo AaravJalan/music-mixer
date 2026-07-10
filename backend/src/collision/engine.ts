@@ -508,8 +508,24 @@ export async function runCollisionEngine(opts: CollisionEngineOptions): Promise<
   const timeRangeA = timeRanges[0] ?? (soloMode ? 'long_term' : 'long_term');
   const timeRangeB = timeRanges[1] ?? (soloMode ? 'short_term' : 'long_term');
 
-  const participantA = await profileToParticipant(sessionIdA, userA, config.userAWeight, timeRangeA);
-  let participantB = await profileToParticipant(sessionIdB, userB, config.userBWeight, timeRangeB);
+  let participantA: ParticipantBundle;
+  let participantB: ParticipantBundle;
+
+  if (sessionIdA === sessionIdB && timeRangeA === timeRangeB) {
+    participantA = await profileToParticipant(sessionIdA, userA, config.userAWeight, timeRangeA);
+    participantB = {
+      ...participantA,
+      weight: config.userBWeight,
+      user: userB,
+    };
+  } else {
+    const [pA, pB] = await Promise.all([
+      profileToParticipant(sessionIdA, userA, config.userAWeight, timeRangeA),
+      profileToParticipant(sessionIdB, userB, config.userBWeight, timeRangeB)
+    ]);
+    participantA = pA;
+    participantB = pB;
+  }
 
   if (participantB.tracks.length === 0 || (soloMode && participantB.tracks.length < 3)) {
     if (soloMode) {
