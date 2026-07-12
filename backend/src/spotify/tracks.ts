@@ -86,9 +86,69 @@ export async function fetchTopTracks(
   return uniqueItems.map(toTopTrack);
 }
 
+const DEFAULT_TRACK_MS = 3.5 * 60 * 1000;
+
 function yearStartTimestamp(): number {
   const now = new Date();
   return new Date(now.getFullYear(), 0, 1).getTime();
+}
+
+/**
+ * Sum actual play durations from Spotify recently-played since `sinceMs` (exclusive).
+ * Spotify only exposes ~50 recent plays per page; we paginate a few pages max.
+ */
+export async function measureListeningMsSince(
+  sessionId: string,
+  sinceMs: number,
+): Promise<number> {
+  let totalMs = 0;
+  let before: string | undefined;
+
+  try {
+    for (let page = 0; page < 8; page++) {
+      const params: Record<string, string> = {
+        limit: '50',
+        after: String(sinceMs),
+      };
+      if (before) params.before = before;
+
+      const data = await spotifyFetch<SpotifyRecentlyPlayedResponse>(
+        sessionId,
+        '/me/player/recently-played',
+        params,
+      );
+
+      if (!data.items?.length) break;
+
+      let reachedCutoff = false;
+      for (const item of data.items) {
+        const playedAt = new Date(item.played_at).getTime();
+        if (playedAt <= sinceMs) {
+          reachedCutoff = true;
+          continue;
+        }
+        totalMs += item.track.duration_ms && item.track.duration_ms > 0
+          ? item.track.duration_ms
+          : DEFAULT_TRACK_MS;
+      }
+
+      const oldest = data.items[data.items.length - 1];
+      if (!oldest || reachedCutoff) break;
+
+      const oldestTime = new Date(oldest.played_at).getTime();
+      if (oldestTime <= sinceMs) break;
+
+      const nextBefore = data.cursors?.before ?? oldest.played_at;
+      if (nextBefore === before) break;
+      before = nextBefore;
+
+      if (data.items.length < 50) break;
+    }
+  } catch (err) {
+    console.warn('[tracks] measureListeningMsSince failed:', err);
+  }
+
+  return totalMs;
 }
 
 /**

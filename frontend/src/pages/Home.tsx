@@ -111,18 +111,45 @@ export function Home({ user }: HomeProps) {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh]">
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-2xl w-full">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-4xl w-full mx-auto px-4 mt-8">
+          <img src="/favicon.svg" alt="MusicMixer Logo" className="w-24 h-24 mx-auto mb-6 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]" />
           <h1 className="text-5xl sm:text-6xl font-bold mb-4">
             <span className="text-gradient">MusicMixer</span>
           </h1>
-          <p className="text-xl text-white/60 mb-2">Spotify Taste Collision Engine</p>
-          <p className="text-white/40 mb-8 max-w-md mx-auto">
-            Blend Spotify taste profiles, explore your listening habits, and unlock your personal music dashboard.
-          </p>
+          <p className="text-xl text-white/60 mb-10">Spotify Taste Collision Engine</p>
+          
           {authError && <AuthErrorBanner errorCode={authError} />}
-          <Button variant="spotify" size="lg" onClick={() => api.login('/')}>
-            Connect with Spotify
-          </Button>
+          <div className="mb-12">
+            <Button variant="spotify" size="lg" onClick={() => api.login('/')}>
+              Connect with Spotify
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md hover:bg-white/10 transition-colors">
+              <div className="text-accent-purple mb-4">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+              </div>
+              <h3 className="font-semibold text-white/90 mb-2">Blend Profiles</h3>
+              <p className="text-sm text-white/50 leading-relaxed">Collide your Spotify taste with friends to create the perfect shared playlist.</p>
+            </div>
+            
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md hover:bg-white/10 transition-colors">
+              <div className="text-cyan-400 mb-4">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+              </div>
+              <h3 className="font-semibold text-white/90 mb-2">Explore Habits</h3>
+              <p className="text-sm text-white/50 leading-relaxed">Track your listening hours, top genres, and historical audio trends.</p>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md hover:bg-white/10 transition-colors">
+              <div className="text-pink-400 mb-4">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              </div>
+              <h3 className="font-semibold text-white/90 mb-2">Unlock Dashboard</h3>
+              <p className="text-sm text-white/50 leading-relaxed">Discover your personal audio dimensions, sonic outliers, and niche score.</p>
+            </div>
+          </div>
         </motion.div>
       </div>
     );

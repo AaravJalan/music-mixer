@@ -1,6 +1,8 @@
 import https from 'node:https';
 import { URL } from 'node:url';
 
+const httpsAgent = new https.Agent({ keepAlive: true });
+
 const RETRYABLE = new Set(['ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENOTFOUND', 'ECONNRESET']);
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -61,6 +63,7 @@ function httpsRequestOnce(
         headers: reqHeaders,
         family: 4,
         timeout: REQUEST_TIMEOUT_MS,
+        agent: httpsAgent,
       },
       (res) => {
         let data = '';

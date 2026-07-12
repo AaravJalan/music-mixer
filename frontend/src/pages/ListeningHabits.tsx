@@ -6,7 +6,6 @@ import { Card } from '../components/ui/Card';
 import { GenrePie } from '../components/dashboard/GenrePie';
 import { ListeningLineChart } from '../components/dashboard/ListeningLineChart';
 import { GenreTrendChart } from '../components/dashboard/GenreTrendChart';
-import { TASTE_TIME_RANGE_OPTIONS } from '../constants/tasteTimeRanges';
 
 interface ListeningHabitsPageProps {
   user: UserProfile;
@@ -18,7 +17,6 @@ function formatHours(hours: number): string {
 }
 
 export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
-  const [term, setTerm] = useState<TasteTimeRange>('medium_term');
   const [data, setData] = useState<ListeningHabitsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +24,7 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.getListeningHabits(term)
+    api.getListeningHabits('long_term')
       .then((res) => {
         if (!cancelled) {
           setData(res);
@@ -40,7 +38,7 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [term]);
+  }, []);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -48,24 +46,6 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
         <div>
           <h1 className="text-3xl font-bold text-gradient">Listening Habits</h1>
           <p className="text-white/50 mt-1">{user.displayName}</p>
-        </div>
-
-        <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 flex-wrap">
-          {TASTE_TIME_RANGE_OPTIONS.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => setTerm(t.value)}
-              className={[
-                'px-4 py-2 rounded-lg text-sm transition-all',
-                term === t.value
-                  ? 'bg-white/10 text-white font-medium'
-                  : 'text-white/40 hover:text-white/80 hover:bg-white/5',
-              ].join(' ')}
-            >
-              {t.label.replace('the ', '')}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -86,18 +66,12 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
           animate={{ opacity: loading ? 0.5 : 1, y: 0 }}
           className="space-y-6"
         >
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Card className="py-4 px-5">
               <p className="text-[11px] uppercase tracking-wider text-white/40">Total Listening</p>
-              <p className="text-2xl font-bold text-gradient mt-1">{formatHours(data.totalListeningHours)}h</p>
-              <p className="text-[11px] text-white/35 mt-0.5">since account inception</p>
-            </Card>
-            
-            <Card className="py-4 px-5">
-              <p className="text-[11px] uppercase tracking-wider text-white/40">Recent Activity</p>
               <p className="text-2xl font-bold text-gradient mt-1">{formatHours(data.totalListeningHoursSinceTracking)}h</p>
               <p className="text-[11px] text-white/35 mt-0.5">
-                {data.firstTrackedDate ? `since ${data.firstTrackedDate}` : 'No tracking history yet'}
+                tracked plays since {data.firstTrackedDate || 'tracking began'}
               </p>
             </Card>
 
@@ -135,19 +109,38 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
           <Card glow="pink">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Daily Listening Volume</h2>
-              {data.dailyIsEstimated && (
+              {!data.dailyIsEstimated && (data.dailyListening?.length ?? 0) > 0 ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
+                  Cron tracked
+                </span>
+              ) : (
                 <span
-                  title="Modeled estimate until per-day play tracking is live"
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-400/30"
+                  title="Needs at least 2 cron snapshots (every 3 days after your first track)"
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/50 border border-white/15"
                 >
-                  Estimated
+                  Collecting data
                 </span>
               )}
             </div>
-            <ListeningLineChart points={data.dailyListening || []} />
-            <p className="text-[11px] text-white/35 mt-3">
-              Hours per day over the last {(data.dailyListening || []).length} days.
-            </p>
+            {!data.dailyIsEstimated && (data.dailyListening?.length ?? 0) >= 2 ? (
+              <>
+                <ListeningLineChart points={data.dailyListening} />
+                <p className="text-[11px] text-white/35 mt-3">
+                  Hours from {data.dailyListening.length} cron snapshots (every 3 days).
+                </p>
+              </>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center">
+                <p className="text-sm text-white/55">
+                  Listening hours unlock after we have enough cron snapshots.
+                </p>
+                <p className="text-[11px] text-white/35 mt-2">
+                  {data.trackingCount > 0
+                    ? `Tracked ${data.trackingCount} so far — need 2+. Next cron runs every 3 days.`
+                    : 'We just started tracking your account. Check back after the next snapshot.'}
+                </p>
+              </div>
+            )}
           </Card>
         </motion.div>
       ) : null}

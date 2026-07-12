@@ -101,6 +101,14 @@ router.get('/callback', async (req: Request, res: Response) => {
       expiresIn: tokens.expires_in,
     });
 
+    // Kick off first listening-habits snapshot immediately for new accounts.
+    // Cron continues every 3 days afterward (skips if a recent snapshot exists).
+    void import('../services/listeningSnapshot')
+      .then(({ ensureInitialListeningSnapshot }) =>
+        ensureInitialListeningSnapshot(sessionId, user.id),
+      )
+      .catch((err) => console.error('Initial listening snapshot failed:', err));
+
     res.cookie(SESSION_COOKIE, sessionId, sessionCookieOptions());
     res.redirect(`${origin || env.frontendUrl}${redirect}`);
   } catch (err) {

@@ -1,11 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%"   stop-color="#ff2d6a"/>
-      <stop offset="50%"  stop-color="#8b5cf6"/>
-      <stop offset="100%" stop-color="#22d3ee"/>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#3B5BFF"/>
     </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
-  <text x="50" y="65" font-size="72" text-anchor="middle" dominant-baseline="middle">🎧</text>
+
+  <!-- App icon rounded square background -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGradient)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+
+  <!-- Waveform bars, centered -->
+  <g fill="#ffffff">
+    <rect x="69" y="213.5" width="34" height="85" rx="17"/>
+    <rect x="137" y="126" width="34" height="260" rx="17"/>
+    <rect x="205" y="166" width="34" height="180" rx="17"/>
+    <rect x="273" y="76" width="34" height="360" rx="17"/>
+    <rect x="341" y="146" width="34" height="220" rx="17"/>
+    <rect x="409" y="213.5" width="34" height="85" rx="17"/>
+  </g>
 </svg>

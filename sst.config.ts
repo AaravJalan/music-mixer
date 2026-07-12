@@ -33,6 +33,7 @@ export default $config({
         SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || "",
         SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || "",
         SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || "",
+        LISTENING_HABITS_TABLE: listeningHabitsTable.name,
       },
     });
 
@@ -40,6 +41,9 @@ export default $config({
     habitsQueue.subscribe({
       handler: "backend/src/workers/queueProcessor.handler",
       link: [listeningHabitsTable],
+      environment: {
+        LISTENING_HABITS_TABLE: listeningHabitsTable.name,
+      },
     });
 
     // 5. Define a Cron Job to fetch and store trends every 3 days
@@ -54,9 +58,11 @@ export default $config({
           SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || "",
           SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || "",
           SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || "",
+          LISTENING_HABITS_TABLE: listeningHabitsTable.name,
         }
       }
     });
+
 
     return {
       apiEndpoint: backendApi.url,

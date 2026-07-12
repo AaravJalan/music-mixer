@@ -10,18 +10,15 @@ import { buildUserTasteProfile } from '../spotify/taste';
 import { getListeningTrends } from './db';
 import { getSessionUser } from './session';
 import { getGhostProfile, isGhostUserId, ghostGenresToStats } from './ghosts';
+import {
+  ensureInitialListeningSnapshot,
+  upgradeLegacyBaselineSnapshot,
+  MIN_SNAPSHOTS_FOR_DAILY_CHART,
+} from './listeningSnapshot';
 
 const DEFAULT_TRACK_MS = 3.5 * 60 * 1000;
 const GENRE_SLICE_LIMIT = 8;
-const DAILY_WINDOW_DAYS = 30;
 
-/**
- * Short-lived cache so repeat visits to the Listening Habits page don't re-hit Spotify
- * (which is the call volume that trips the rate limiter).
- *
- * TODO(dynamodb): Once the tracking Lambda + `ListeningHabits` table exist, this in-memory
- * cache becomes a read-through cache in front of DynamoDB instead of the Spotify estimate.
- */
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const cache = new Map<string, { at: number; data: ListeningHabitsResponse }>();
 
@@ -32,11 +29,6 @@ function formatGenre(genre: string): string {
     .join(' ');
 }
 
-/**
- * Genre share across the user's analyzed track history. Each track contributes to the genres
- * of its artists; totals are normalized to percentages and the long tail is grouped as "Other"
- * so the pie chart stays readable.
- */
 function computeGenreDistribution(
   tracks: TopTrack[],
   artistGenreMap: Map<string, string[]>,
@@ -82,36 +74,17 @@ function computeGenreDistribution(
   return slices;
 }
 
-/**
- * Daily listening hours for the line graph.
- *
- * TODO(dynamodb): This is a MODELED estimate — Spotify never exposes historical daily
- * listening, so we spread the accumulated hours across a trailing window with a gentle
- * weekly rhythm. Once the play-tracking Lambda is deployed, replace this with a real query
- * against the `ListeningEvents` DynamoDB table:
- *   - PK: `USER#<userId>`  SK: `DAY#<yyyy-mm-dd>`
- *   - attribute: `listeningMs` (accumulated per day by the ingestion Lambda)
- * Then set `dailyIsEstimated = false` in getListeningHabits.
- */
-function buildDailyListeningSeries(totalHours: number, days = DAILY_WINDOW_DAYS): DailyListeningPoint[] {
-  const points: DailyListeningPoint[] = [];
-  const perDay = totalHours / days;
-  const today = new Date();
-
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    const dow = date.getDay();
-    // Weekends skew higher; deterministic wobble so the line isn't flat.
-    const weekend = dow === 0 || dow === 6 ? 1.35 : 0.9;
-    const wobble = 0.85 + ((i * 37) % 30) / 100;
-    points.push({
-      date: date.toISOString().slice(0, 10),
-      hours: Math.round(perDay * weekend * wobble * 10) / 10,
-    });
-  }
-
-  return points;
+/** Map DynamoDB cron snapshots → chart points (hours). Oldest → newest. */
+function dailyPointsFromSnapshots(
+  trends: { date: string; totalListeningTimeMs?: number; capturedAt?: string }[],
+): DailyListeningPoint[] {
+  return [...trends]
+    .filter((t) => Boolean(t.capturedAt))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((t) => ({
+      date: t.date,
+      hours: Math.round(((t.totalListeningTimeMs || 0) / 3_600_000) * 10) / 10,
+    }));
 }
 
 export async function getListeningHabits(
@@ -127,14 +100,22 @@ export async function getListeningHabits(
 
   const realUserId = userId ?? (await getSessionUser(sessionId))?.id;
 
-  let profile: any;
+  let profile: {
+    tracks: TopTrack[];
+    genres: { genre: string; percentage: number; count?: number }[];
+    artistGenreMap: Map<string, string[]>;
+  };
+
   if (realUserId && isGhostUserId(realUserId)) {
     const ghost = getGhostProfile(realUserId);
     if (!ghost) throw new Error('Ghost profile not found');
-    
-    // Create a mock profile from ghost data
     profile = {
-      tracks: ghost.tracks || [],
+      tracks: (ghost.tracks || []).map((t) => ({
+        ...t,
+        artistIds: t.artistIds ?? [],
+        popularity: t.popularity ?? 50,
+        releaseDate: t.releaseDate ?? '2020-01-01',
+      })),
       genres: ghostGenresToStats(ghost.genres || []),
       artistGenreMap: new Map(),
     };
@@ -143,26 +124,18 @@ export async function getListeningHabits(
   }
 
   const genreDistribution = computeGenreDistribution(profile.tracks, profile.artistGenreMap);
+  const finalGenreDistribution =
+    genreDistribution.length > 0
+      ? genreDistribution
+      : (profile.genres || []).map((g) => ({
+          genre: g.genre,
+          percentage: g.percentage,
+          trackCount: g.count ?? 0,
+        }));
 
-  // If it's a ghost profile, we might not have enough tracks for computeGenreDistribution
-  // So fallback to ghostGenresToStats if empty
-  const finalGenreDistribution = genreDistribution.length > 0 
-    ? genreDistribution 
-    : (profile.genres || []).map((g: any) => ({
-        genre: g.genre,
-        percentage: g.percentage,
-        trackCount: g.count
-      }));
-
-  // Listening Volume: accumulated duration from account inception (long-term play model).
-  const durationsMs = profile.tracks.map((t: any) => t.durationMs ?? DEFAULT_TRACK_MS);
+  const durationsMs = profile.tracks.map((t) => t.durationMs ?? DEFAULT_TRACK_MS);
   const totalListeningHours = estimateListeningHours('long_term', durationsMs);
   const totalListeningMs = Math.round(totalListeningHours * 3_600_000);
-
-  const dailyListening = buildDailyListeningSeries(
-    // Show a recent slice of the accumulated volume across the trailing window.
-    estimateListeningHours(term, durationsMs),
-  );
 
   const response: ListeningHabitsResponse = {
     term,
@@ -170,8 +143,9 @@ export async function getListeningHabits(
     totalTracks: profile.tracks.length,
     totalListeningMs,
     totalListeningHours,
-    dailyListening,
-    dailyIsEstimated: true, // TODO(dynamodb): flip to false once tracking Lambda backs the series
+    // Never show estimated daily hours — wait for enough cron snapshots.
+    dailyListening: [],
+    dailyIsEstimated: true,
     totalListeningHoursSinceTracking: 0,
     trackingCount: 0,
     firstTrackedDate: null,
@@ -179,30 +153,56 @@ export async function getListeningHabits(
     platform: 'spotify',
   };
 
-  // If we have a userId, let's fetch their historical trends from DynamoDB
-  if (realUserId) {
+  if (realUserId && !isGhostUserId(realUserId)) {
     try {
-      const trends = await getListeningTrends(realUserId);
+      let trends = await getListeningTrends(realUserId);
+
+      // New account / empty history: run one snapshot immediately, then cron every 3 days.
+      if (!trends || trends.length === 0) {
+        try {
+          await ensureInitialListeningSnapshot(sessionId, realUserId);
+          trends = await getListeningTrends(realUserId);
+        } catch (snapErr) {
+          console.error(`Initial listening snapshot failed for ${realUserId}:`, snapErr);
+        }
+      } else if (trends.every((t) => !t.capturedAt)) {
+        // Upgrade legacy estimate rows without Spotify (API lock must not hide trackingCount).
+        try {
+          const latest = [...trends].sort((a, b) => b.date.localeCompare(a.date))[0];
+          await upgradeLegacyBaselineSnapshot(latest);
+          trends = await getListeningTrends(realUserId);
+        } catch (upgradeErr) {
+          console.error(`Legacy snapshot upgrade failed for ${realUserId}:`, upgradeErr);
+        }
+      }
+
       if (trends && trends.length > 0) {
-        // Sort trends by date ascending (oldest first) for charting
         trends.sort((a, b) => a.date.localeCompare(b.date));
-        
+
         response.trackingCount = trends.length;
         response.firstTrackedDate = trends[0].date;
-        
-        // Calculate total listening hours since tracking started (sum of delta, or just max value)
-        // Since each snapshot is a cumulative estimate based on the term, we just sum them for now.
-        const totalMs = trends.reduce((acc, t) => acc + (t.totalListeningTimeMs || 0), 0);
-        response.totalListeningHoursSinceTracking = Math.round(totalMs / 3600000);
-        
-        // Map to GenreTrendPoint
-        response.genreTrends = trends.map(t => ({
+
+        // Each snapshot stores plays in its window (baseline = 0); sum = hours since tracking.
+        // Legacy rows without capturedAt used modeled top-track estimates — exclude them.
+        const totalMs = trends.reduce((acc, t) => {
+          if (!t.capturedAt) return acc;
+          return acc + (t.totalListeningTimeMs || 0);
+        }, 0);
+        response.totalListeningHoursSinceTracking =
+          Math.round((totalMs / 3_600_000) * 10) / 10;
+
+        response.genreTrends = trends.map((t) => ({
           date: t.date,
-          percentages: t.genrePercentages || {}
+          percentages: t.genrePercentages || {},
         }));
+
+        if (trends.length >= MIN_SNAPSHOTS_FOR_DAILY_CHART) {
+          response.dailyListening = dailyPointsFromSnapshots(trends);
+          response.dailyIsEstimated = false;
+        }
       }
     } catch (err) {
-      console.error(`Failed to fetch listening trends for ${realUserId}:`, err);
+      console.error(`Failed to fetch/save listening trends for ${realUserId}:`, err);
     }
   }
 

@@ -59,7 +59,25 @@ export function useCollision(id: string | undefined) {
   const refresh = useCallback(async () => {
     if (!id) return;
     try {
-      const { collision: c } = await api.getCollision(id);
+      let c, r;
+      
+      // If we already know it's complete, fetch both in parallel
+      if (collision?.status === 'complete') {
+        const [cRes, rRes] = await Promise.all([
+          api.getCollision(id),
+          api.getResult(id).catch(() => ({ result: null }))
+        ]);
+        c = cRes.collision;
+        r = rRes.result;
+      } else {
+        const cRes = await api.getCollision(id);
+        c = cRes.collision;
+        if (c.status === 'complete') {
+          const rRes = await api.getResult(id);
+          r = rRes.result;
+        }
+      }
+
       setCollision(c);
 
       if (settingsInitializedFor.current !== id) {
@@ -77,8 +95,7 @@ export function useCollision(id: string | undefined) {
         });
       }
 
-      if (c.status === 'complete') {
-        const { result: r } = await api.getResult(id);
+      if (r) {
         setResult(r);
         if (r.similarityScore < PLAYLIST_MATCH_THRESHOLD) {
           setSettings((prev) =>
@@ -98,16 +115,21 @@ export function useCollision(id: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, collision?.status]);
 
   useEffect(() => {
     refresh();
+
+    if (collision?.status === 'complete') {
+      return;
+    }
+
     const interval = setInterval(refresh, 3000);
     return () => {
       clearInterval(interval);
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [refresh]);
+  }, [refresh, collision?.status]);
 
   const run = async () => {
     if (!id) return;
@@ -126,6 +148,7 @@ export function useCollision(id: string | undefined) {
       });
       setResult(r);
       setMetrics(m);
+      setCollision(prev => prev ? { ...prev, status: 'complete' } : null);
       if (r.similarityScore < PLAYLIST_MATCH_THRESHOLD) {
         setSettings((prev) =>
           prev.playlistGenerationMode === 'midpoint'
@@ -133,7 +156,6 @@ export function useCollision(id: string | undefined) {
             : prev,
         );
       }
-      await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Collision failed');
     } finally {

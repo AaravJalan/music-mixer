@@ -19,7 +19,7 @@ const NAV_ITEMS = [
     isActive: (path: string) =>
       path === '/' || path.startsWith('/collision/') || path.startsWith('/join'),
   },
-  { id: 'friends', to: '/friends', label: 'Friends', isActive: (path: string) => path.startsWith('/friends') },
+  { id: 'friends', to: '/friends', label: 'Your Friends', isActive: (path: string) => path.startsWith('/friends') },
   {
     id: 'history',
     to: '/collisions',
@@ -44,7 +44,7 @@ export function SidePanel({ user, onLogout }: SidePanelProps) {
     <aside className="hidden md:flex flex-col w-52 shrink-0 fixed left-0 top-0 bottom-0 z-40 glass border-r border-white/10">
       <div className="p-5 border-b border-white/5">
         <p className="font-semibold text-sm">MusicMixer</p>
-        <p className="text-[10px] text-white/35 uppercase tracking-wider mt-0.5">Spotify</p>
+        <p className="text-[10px] text-white/35 uppercase tracking-wider mt-0.5">SPOTIFY ENGINE</p>
       </div>
 
       <nav className="flex-1 p-3 space-y-1">

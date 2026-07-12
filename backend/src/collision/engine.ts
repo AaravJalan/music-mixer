@@ -21,6 +21,7 @@ import {
 } from '../spotify/build';
 import { sharedGenresMulti } from '../math/genres';
 import { ghostGenresToStats, getGhostProfile, ghostToProfileArtists, isGhostUserId } from '../services/ghosts';
+import { getCachedTasteProfile, setCachedTasteProfile } from '../lib/cache';
 
 const FEATURE_LABELS: Record<string, string> = {
   danceability: 'Danceability',
@@ -298,7 +299,14 @@ export async function profileToParticipant(
   weight: number,
   timeRange: TasteTimeRange = 'long_term',
 ): Promise<ParticipantBundle> {
-  const profile = await buildUserTasteProfile(sessionId, timeRange);
+  let profile = await getCachedTasteProfile(user.id, timeRange);
+  if (!profile) {
+    profile = await buildUserTasteProfile(sessionId, timeRange);
+    if (profile.tracks.length > 0) {
+      await setCachedTasteProfile(user.id, timeRange, profile);
+    }
+  }
+
   if (profile.tracks.length === 0) {
     throw new Error('Need top tracks — listen to more music on Spotify first');
   }
@@ -409,45 +417,52 @@ export async function regenerateCollisionPlaylist(
   const bundles: ParticipantBundle[] = [];
 
   if (participantResults.length > 0) {
-    for (let i = 0; i < participantResults.length; i++) {
-      const p = participantResults[i];
+    const bundlePromises = participantResults.map(async (p, i) => {
       if (p.isGhost || isGhostUserId(p.user.id)) {
         const ghost = await getGhostProfile(p.user.id);
         if (!ghost) throw new Error(`Ghost profile not found: ${p.user.id}`);
-        bundles.push(ghostToParticipant(ghost, weights[i] ?? p.weight));
+        return ghostToParticipant(ghost, weights[i] ?? p.weight);
       } else {
         const participantSession = i === 0
           ? context.userASessionId
           : (context.userBSessionId ?? sessionId);
-        bundles.push(await profileToParticipant(
+        return profileToParticipant(
           participantSession,
           p.user,
           weights[i] ?? p.weight,
           p.timeRange ?? timeRanges[i] ?? 'long_term',
-        ));
+        );
       }
-    }
+    });
+    bundles.push(...(await Promise.all(bundlePromises)));
   } else {
     if (!existing.userA || !existing.userB) {
       throw new Error('Cannot regenerate playlist without participant data');
     }
-    bundles.push(await profileToParticipant(
+    
+    const p1Promise = profileToParticipant(
       context.userASessionId,
       existing.userA,
       weights[0] ?? config.userAWeight,
       timeRanges[0] ?? 'long_term',
-    ));
-    const ghost = context.ghostUserBId ? await getGhostProfile(context.ghostUserBId) : null;
-    if (ghost) {
-      bundles.push(ghostToParticipant(ghost, weights[1] ?? config.userBWeight));
+    );
+    
+    let p2Promise: Promise<ParticipantBundle>;
+    if (context.ghostUserBId) {
+      const ghost = getGhostProfile(context.ghostUserBId);
+      if (!ghost) throw new Error(`Ghost profile not found: ${context.ghostUserBId}`);
+      p2Promise = Promise.resolve(ghostToParticipant(ghost, weights[1] ?? config.userBWeight));
     } else {
-      bundles.push(await profileToParticipant(
+      p2Promise = profileToParticipant(
         context.userBSessionId ?? sessionId,
         existing.userB,
         weights[1] ?? config.userBWeight,
         timeRanges[1] ?? 'long_term',
-      ));
+      );
     }
+    
+    const [p1, p2] = await Promise.all([p1Promise, p2Promise]);
+    bundles.push(p1, p2);
   }
 
   const trackPools = bundles.map((p) => p.tracks);

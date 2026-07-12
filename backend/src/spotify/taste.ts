@@ -69,10 +69,6 @@ export interface UserTasteProfile {
   usedEstimatedFeatures: true;
 }
 
-const MAX_ARTIST_DETAIL_FETCHES = 8;
-const ENRICH_BATCH_SIZE = 3;
-const ENRICH_BATCH_DELAY_MS = 250;
-
 function safeGenres(genres: string[] | null | undefined): string[] {
   if (!genres || !Array.isArray(genres)) return [];
   return genres.filter((g) => typeof g === 'string' && g.length > 0);
@@ -80,34 +76,6 @@ function safeGenres(genres: string[] | null | undefined): string[] {
 
 function rankWeight(rankIndex: number, total: number): number {
   return Math.max(1, total - rankIndex);
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchArtistGenres(
-  sessionId: string,
-  artist: SpotifyArtist,
-): Promise<string[]> {
-  const cached = await getCachedArtistGenres(artist.id);
-  if (cached && cached.length > 0) return cached;
-
-  try {
-    const detail = await spotifyFetch<SpotifyArtist>(sessionId, `/artists/${artist.id}`);
-    const apiGenres = safeGenres(detail.genres);
-    if (apiGenres.length > 0) {
-      await setCachedArtistGenres(artist.id, artist.name, apiGenres);
-      return apiGenres;
-    }
-  } catch {
-    // fall through to inference
-  }
-  const inferred = inferGenresFromArtistName(artist.name);
-  if (inferred.length > 0) {
-    await setCachedArtistGenres(artist.id, artist.name, inferred);
-  }
-  return inferred;
 }
 
 /** Rate-limited artist detail fetch — only top N artists. */
@@ -127,26 +95,43 @@ async function enrichArtistGenres(
     }
   }
 
-  const needsFetch = artists
-    .filter((a) => !map.has(a.id) || map.get(a.id)!.length === 0)
-    .slice(0, MAX_ARTIST_DETAIL_FETCHES);
+  const needsFetch = artists.filter((a) => !map.has(a.id) || map.get(a.id)!.length === 0);
 
-  for (let i = 0; i < needsFetch.length; i += ENRICH_BATCH_SIZE) {
-    const batch = needsFetch.slice(i, i + ENRICH_BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(async (artist) => ({
-        id: artist.id,
-        genres: await fetchArtistGenres(sessionId, artist),
-      })),
+  if (needsFetch.length > 0) {
+    // Check Redis cache first for all missing artists
+    const cachedResults = await Promise.all(
+      needsFetch.map(async (artist) => ({
+        artist,
+        genres: await getCachedArtistGenres(artist.id)
+      }))
     );
-    for (const { id, genres } of results) {
-      map.set(id, genres);
+
+    const stillNeedsFetch: SpotifyArtist[] = [];
+    for (const { artist, genres } of cachedResults) {
+      if (genres && genres.length > 0) {
+        map.set(artist.id, genres);
+      } else {
+        stillNeedsFetch.push(artist);
+      }
     }
-    if (i + ENRICH_BATCH_SIZE < needsFetch.length) {
-      await wait(ENRICH_BATCH_DELAY_MS);
+
+    if (stillNeedsFetch.length > 0) {
+      // Fetch remaining from Spotify in batches of 50
+      const fetchedMap = await fetchArtistsBatch(sessionId, stillNeedsFetch.map((a) => a.id));
+      
+      // Save to map and Redis cache
+      for (const artist of stillNeedsFetch) {
+        const detail = fetchedMap.get(artist.id);
+        const apiGenres = safeGenres(detail?.genres);
+        if (apiGenres.length > 0) {
+          map.set(artist.id, apiGenres);
+          await setCachedArtistGenres(artist.id, artist.name, apiGenres);
+        }
+      }
     }
   }
 
+  // Fallback to inference for any that still have no genres
   for (const artist of artists) {
     if (!map.has(artist.id) || map.get(artist.id)!.length === 0) {
       map.set(artist.id, inferGenresFromArtistName(artist.name));

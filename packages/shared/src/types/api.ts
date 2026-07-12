@@ -213,9 +213,9 @@ export interface ListeningHabitsResponse {
   /** Accumulated listening time modeled from account inception (long-term). */
   totalListeningMs: number;
   totalListeningHours: number;
-  /** Daily listening hours for the line graph. Estimated until DynamoDB tracking is live. */
+  /** Daily listening hours for the line graph — empty until enough DynamoDB cron snapshots exist. */
   dailyListening: DailyListeningPoint[];
-  /** True while the daily series is modeled; false once the tracking Lambda backs it. */
+  /** True until trackingCount reaches the chart threshold (cron-backed series). */
   dailyIsEstimated: boolean;
   
   // Historical tracking fields from DynamoDB Cron
