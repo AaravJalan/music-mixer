@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import type { ListeningHabitsResponse, TasteTimeRange, UserProfile } from '@music-mixer/shared';
+import type { ListeningHabitsResponse, UserProfile } from '@music-mixer/shared';
 import { api } from '../api/client';
 import { Card } from '../components/ui/Card';
 import { GenrePie } from '../components/dashboard/GenrePie';
