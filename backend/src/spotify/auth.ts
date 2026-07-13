@@ -98,7 +98,7 @@ export function buildAuthorizeUrl(state: string, redirectUri: string, showDialog
     client_id: env.spotify.clientId(),
     response_type: 'code',
     redirect_uri: redirectUri,
-    scope: 'user-read-private user-read-email user-top-read playlist-modify-private',
+    scope: 'user-read-private user-read-email user-top-read playlist-modify-private user-read-recently-played',
     state,
   });
 
