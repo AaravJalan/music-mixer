@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://lrb2vu4pw4deuzlmoauxeaapma0xwlgj.lambda-url.us-east-1.on.aws/api/$1"
+      "destination": "https://p54gf2aqrhcz64zxwe5citc5im0xqtpn.lambda-url.us-east-1.on.aws/api/$1"
     },
     {
       "source": "/(.*)",
