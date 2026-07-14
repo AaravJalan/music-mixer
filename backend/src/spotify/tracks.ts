@@ -2,6 +2,10 @@ import { SPOTIFY_TOP_TRACKS_LIMIT } from '@music-mixer/shared';
 import type { TasteTimeRange } from '@music-mixer/shared';
 import { spotifyFetch } from './client';
 
+const TRACKS_CACHE_TTL = 5 * 60 * 1000;
+const listeningMsCache = new Map<string, { at: number; promise: Promise<number> }>();
+const ytdTracksCache = new Map<string, { at: number; promise: Promise<TopTrack[]> }>();
+
 interface SpotifyTopTracksResponse {
   items: SpotifyTrack[];
 }
@@ -97,7 +101,24 @@ function yearStartTimestamp(): number {
  * Sum actual play durations from Spotify recently-played since `sinceMs` (exclusive).
  * Spotify only exposes ~50 recent plays per page; we paginate a few pages max.
  */
-export async function measureListeningMsSince(
+export function measureListeningMsSince(
+  sessionId: string,
+  sinceMs: number,
+): Promise<number> {
+  const cacheKey = `${sessionId}:${sinceMs}`;
+  const cached = listeningMsCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < TRACKS_CACHE_TTL) {
+    return cached.promise;
+  }
+  
+  const promise = doMeasureListeningMsSince(sessionId, sinceMs);
+  listeningMsCache.set(cacheKey, { at: Date.now(), promise });
+  promise.catch(() => listeningMsCache.delete(cacheKey));
+  
+  return promise;
+}
+
+async function doMeasureListeningMsSince(
   sessionId: string,
   sinceMs: number,
 ): Promise<number> {
@@ -155,7 +176,21 @@ export async function measureListeningMsSince(
  * Year-to-date profile from recently played (requires user-read-recently-played scope).
  * Paginates with `before` cursor; ranks tracks by play frequency since Jan 1.
  */
-async function fetchYearToDateTracks(sessionId: string): Promise<TopTrack[]> {
+function fetchYearToDateTracks(sessionId: string): Promise<TopTrack[]> {
+  const cacheKey = sessionId;
+  const cached = ytdTracksCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < TRACKS_CACHE_TTL) {
+    return cached.promise;
+  }
+  
+  const promise = doFetchYearToDateTracks(sessionId);
+  ytdTracksCache.set(cacheKey, { at: Date.now(), promise });
+  promise.catch(() => ytdTracksCache.delete(cacheKey));
+  
+  return promise;
+}
+
+async function doFetchYearToDateTracks(sessionId: string): Promise<TopTrack[]> {
   const after = yearStartTimestamp();
   const playCounts = new Map<string, { track: TopTrack; count: number }>();
   let before: string | undefined;

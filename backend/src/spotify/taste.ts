@@ -7,6 +7,8 @@ import { inferGenresFromArtistName, inferGenresFromText } from './inference';
 import { spotifyFetch } from './client';
 import { fetchTopTracks, resolveSpotifyTimeRange, type TopTrack } from './tracks';
 
+const PROFILE_CACHE_TTL = 5 * 60 * 1000;
+const profileCache = new Map<string, { at: number; promise: Promise<UserTasteProfile> }>();
 
 
 interface SpotifyArtist {
@@ -217,7 +219,27 @@ function artistsFromTracks(tracks: TopTrack[]): SpotifyArtist[] {
     }));
 }
 
-export async function buildUserTasteProfile(
+export function buildUserTasteProfile(
+  sessionId: string,
+  timeRange: TasteTimeRange = 'medium_term',
+  genreDisplayLimit = 15,
+): Promise<UserTasteProfile> {
+  const cacheKey = `${sessionId}:${timeRange}:${genreDisplayLimit}`;
+  const cached = profileCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < PROFILE_CACHE_TTL) {
+    return cached.promise;
+  }
+  
+  const promise = doBuildUserTasteProfile(sessionId, timeRange, genreDisplayLimit);
+  profileCache.set(cacheKey, { at: Date.now(), promise });
+  
+  // Clear from cache on failure so subsequent calls can retry
+  promise.catch(() => profileCache.delete(cacheKey));
+  
+  return promise;
+}
+
+async function doBuildUserTasteProfile(
   sessionId: string,
   timeRange: TasteTimeRange = 'medium_term',
   genreDisplayLimit = 15,
