@@ -29,6 +29,15 @@ export function createApp() {
   }));
   app.use(express.json());
   app.use(cookieParser());
+
+  // Disable Vercel/CDN caching globally for all API routes
+  app.use((req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+  });
+
   app.use(telemetryMiddleware);
   app.use(rateLimiter);
 
