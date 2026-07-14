@@ -115,7 +115,7 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
                 </span>
               ) : (
                 <span
-                  title="Needs at least 2 cron snapshots (every 3 days after your first track)"
+                  title="Needs at least 2 cron snapshots to display trends"
                   className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/50 border border-white/15"
                 >
                   Collecting data
@@ -126,7 +126,7 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
               <>
                 <ListeningLineChart points={data.dailyListening} />
                 <p className="text-[11px] text-white/35 mt-3">
-                  Hours from {data.dailyListening.length} cron snapshots (every 3 days).
+                  Hours from {data.dailyListening.length} cron snapshots.
                 </p>
               </>
             ) : (
@@ -136,8 +136,8 @@ export function ListeningHabitsPage({ user }: ListeningHabitsPageProps) {
                 </p>
                 <p className="text-[11px] text-white/35 mt-2">
                   {data.trackingCount > 0
-                    ? `Tracked ${data.trackingCount} so far — need 2+. Next cron runs every 3 days.`
-                    : 'We just started tracking your account. Check back after the next snapshot.'}
+                    ? `Tracked ${data.trackingCount} so far — need 2+. Next snapshot in ${data.daysUntilNextCron} day${data.daysUntilNextCron === 1 ? '' : 's'}.`
+                    : `We just started tracking your account. Next snapshot in ${data.daysUntilNextCron} day${data.daysUntilNextCron === 1 ? '' : 's'}.`}
                 </p>
               </div>
             )}

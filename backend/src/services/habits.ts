@@ -4,7 +4,7 @@ import type {
   ListeningHabitsResponse,
   TasteTimeRange,
 } from '@music-mixer/shared';
-import type { TopTrack } from '../spotify/tracks';
+import { measureListeningMsSince, type TopTrack } from '../spotify/tracks';
 import { estimateListeningHours } from '../math/listening';
 import { buildUserTasteProfile } from '../spotify/taste';
 import { getListeningTrends } from './db';
@@ -14,6 +14,7 @@ import {
   ensureInitialListeningSnapshot,
   upgradeLegacyBaselineSnapshot,
   MIN_SNAPSHOTS_FOR_DAILY_CHART,
+  getCronIntervalDays,
 } from './listeningSnapshot';
 
 const DEFAULT_TRACK_MS = 3.5 * 60 * 1000;
@@ -150,6 +151,7 @@ export async function getListeningHabits(
     trackingCount: 0,
     firstTrackedDate: null,
     genreTrends: [],
+    daysUntilNextCron: 1,
     platform: 'spotify',
   };
 
@@ -184,10 +186,25 @@ export async function getListeningHabits(
 
         // Each snapshot stores plays in its window (baseline = 0); sum = hours since tracking.
         // Legacy rows without capturedAt used modeled top-track estimates — exclude them.
-        const totalMs = trends.reduce((acc, t) => {
+        let totalMs = trends.reduce((acc, t) => {
           if (!t.capturedAt) return acc;
           return acc + (t.totalListeningTimeMs || 0);
         }, 0);
+
+        // Add live, unsnapshotted hours since the most recent snapshot
+        const latestSnapshot = trends[trends.length - 1];
+        if (latestSnapshot?.capturedAt) {
+          try {
+            const liveMs = await measureListeningMsSince(
+              sessionId,
+              new Date(latestSnapshot.capturedAt).getTime()
+            );
+            totalMs += liveMs;
+          } catch (err) {
+            console.warn(`Failed to fetch live listening ms for ${realUserId}:`, err);
+          }
+        }
+
         response.totalListeningHoursSinceTracking =
           Math.round((totalMs / 3_600_000) * 10) / 10;
 
@@ -200,6 +217,16 @@ export async function getListeningHabits(
           response.dailyListening = dailyPointsFromSnapshots(trends);
           response.dailyIsEstimated = false;
         }
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const accountAgeDays = Math.floor(
+          Math.abs(new Date(todayStr).getTime() - new Date(response.firstTrackedDate).getTime()) / 86400000
+        );
+        const interval = getCronIntervalDays(accountAgeDays);
+        const daysSinceLast = Math.floor(
+          Math.abs(new Date(todayStr).getTime() - new Date(latestSnapshot.date).getTime()) / 86400000
+        );
+        response.daysUntilNextCron = Math.max(0, interval - daysSinceLast);
       }
     } catch (err) {
       console.error(`Failed to fetch/save listening trends for ${realUserId}:`, err);

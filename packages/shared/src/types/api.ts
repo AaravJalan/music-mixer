@@ -223,6 +223,7 @@ export interface ListeningHabitsResponse {
   trackingCount: number;
   firstTrackedDate: string | null;
   genreTrends: GenreTrendPoint[];
+  daysUntilNextCron: number;
   
   platform: 'spotify';
   cachedAt?: string;

@@ -66,3 +66,18 @@ export async function getListeningTrends(userId: string, limit = 30) {
   );
   return (result.Items ?? []) as TrendSnapshot[];
 }
+
+export async function getOldestListeningTrend(userId: string) {
+  const result = await docClient.send(
+    new QueryCommand({
+      TableName: getTableName(),
+      KeyConditionExpression: 'userId = :uid',
+      ExpressionAttributeValues: {
+        ':uid': userId,
+      },
+      ScanIndexForward: true,
+      Limit: 1,
+    }),
+  );
+  return (result.Items ?? [])[0] as TrendSnapshot | undefined;
+}

@@ -3,13 +3,17 @@ import { refreshAccessToken } from '../spotify/auth';
 import { buildUserTasteProfile } from '../spotify/taste';
 import { measureListeningMsSince } from '../spotify/tracks';
 import { redis } from './redis/client';
-import { getListeningTrends, saveListeningHabitSnapshot, type TrendSnapshot } from './db';
+import { getListeningTrends, getOldestListeningTrend, saveListeningHabitSnapshot, type TrendSnapshot } from './db';
 
 /** Minimum DynamoDB snapshots before we expose the daily listening chart. */
 export const MIN_SNAPSHOTS_FOR_DAILY_CHART = 2;
 
-/** Cron cadence — skip users who already have a snapshot within this window. */
-export const SNAPSHOT_INTERVAL_DAYS = 3;
+/** Cron cadence phases out as the account ages. */
+export function getCronIntervalDays(accountAgeDays: number): number {
+  if (accountAgeDays <= 10) return 1;
+  if (accountAgeDays <= 20) return 2;
+  return 3;
+}
 
 function daysBetween(a: string, b: string): number {
   const ms = Math.abs(new Date(b).getTime() - new Date(a).getTime());
@@ -108,8 +112,14 @@ export async function snapshotUserFromRefreshToken(
   const today = new Date().toISOString().slice(0, 10);
   try {
     const trends = await getListeningTrends(userId, 1);
-    if (trends?.[0]?.date && daysBetween(trends[0].date, today) < SNAPSHOT_INTERVAL_DAYS) {
-      return 'skipped';
+    const oldestTrend = await getOldestListeningTrend(userId);
+    
+    if (trends?.[0]?.date && oldestTrend?.date) {
+      const accountAge = daysBetween(oldestTrend.date, today);
+      const interval = getCronIntervalDays(accountAge);
+      if (daysBetween(trends[0].date, today) < interval) {
+        return 'skipped';
+      }
     }
 
     const tokens = await refreshAccessToken(refreshToken);

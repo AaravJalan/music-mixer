@@ -46,9 +46,9 @@ export default $config({
       },
     });
 
-    // 5. Define a Cron Job to fetch and store trends every 3 days
+    // 5. Define a Cron Job to fetch and store trends every 1 day
     new sst.aws.Cron("TrendHabitsSnapshot", {
-      schedule: "rate(3 days)", // Run every 3 days
+      schedule: "rate(1 day)", // Run every 1 day
       job: {
         handler: "backend/src/workers/trendSnapshot.handler",
         link: [listeningHabitsTable],
