@@ -6,10 +6,10 @@ import type {
   TasteTimeRange,
   UserProfile,
 } from '@music-mixer/shared';
-import { weightedCentroid } from '../math/vector';
-import { averagePairwiseSimilarity } from '../math/similarity';
-import { estimateListeningHoursFromTopTracks } from '../math/listening';
-import { findSharedTopArtists } from '../math/sharedArtists';
+import { weightedCentroid } from '../analytics/vector';
+import { averagePairwiseSimilarity } from '../analytics/similarity';
+import { estimateListeningHoursFromTopTracks } from '../analytics/listening';
+import { findSharedTopArtists } from '../analytics/sharedArtists';
 import type { TopTrack } from '../spotify/tracks';
 import type { ProfileArtist } from '../spotify/taste';
 import { buildUserTasteProfile } from '../spotify/taste';
@@ -19,7 +19,7 @@ import {
   resolveGenreHints,
   resolvePlaylistBuildTargets,
 } from '../spotify/build';
-import { sharedGenresMulti } from '../math/genres';
+import { sharedGenresMulti } from '../analytics/genres';
 import { ghostGenresToStats, getGhostProfile, ghostToProfileArtists, isGhostUserId } from '../services/ghosts';
 import { getCachedTasteProfile, setCachedTasteProfile } from '../lib/cache';
 

@@ -9,7 +9,7 @@ import { AUDIO_FEATURE_KEYS, PLAYLIST_MATCH_THRESHOLD, SPOTIFY_SEARCH_LIMIT } fr
 import type { AudioFeatureDimension } from '@music-mixer/shared';
 import { resolveAnchorGenre } from './genreModel';
 import { applyLinguisticVetoToPools } from './veto';
-import { normalizeArtistName } from '../math/sharedArtists';
+import { normalizeArtistName } from '../analytics/sharedArtists';
 import { spotifyFetch, SpotifyApiError } from './client';
 import type { TopTrack } from './tracks';
 

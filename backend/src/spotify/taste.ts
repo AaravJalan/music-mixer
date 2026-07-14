@@ -1,6 +1,6 @@
 import type { AudioFeatureVector, GenreStat, TasteTimeRange } from '@music-mixer/shared';
 import { SPOTIFY_TOP_TRACKS_LIMIT } from '@music-mixer/shared';
-import { aggregateWeightedGenres } from '../math/genres';
+import { aggregateWeightedGenres } from '../analytics/genres';
 import { computeWeightedTasteVector, type WeightedGenre } from './genreModel';
 import { getCachedArtistGenres, setCachedArtistGenres } from '../lib/cache';
 import { inferGenresFromArtistName, inferGenresFromText } from './inference';

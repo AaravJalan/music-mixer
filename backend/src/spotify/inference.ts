@@ -23,7 +23,7 @@ const TEXT_RULES: Array<{ pattern: RegExp; genres: string[] }> = [
 /** Well-known artists → genres when API omits them. */
 const KNOWN_ARTIST_GENRES: Record<string, string[]> = {
   'taylor swift': ['pop', 'country'],
-  'coldplay': ['alternative rock', 'pop rock', 'pop', 'synth-pop', 'post-britpop', 'ambient'],
+  'coldplay': ['alternative rock', 'pop rock', 'pop', 'synth-pop', 'ambient'],
   'ed sheeran': ['pop', 'folk'],
   'the weeknd': ['pop', 'r&b'],
   'drake': ['hip hop', 'rap'],

@@ -77,6 +77,7 @@ Create `.env` at the repo root (see `.env.example`):
 ### Dashboard & analytics
 
 - Personal taste radar (6D feature vector)
+- **Rule-based Lexical Genre Inference Engine** — fallback heuristic parsing for metadata gaps
 - Top genres, artists, and tracks
 - Narrative listening insights and sonic outlier detection
 - Estimated listening hours and play counts
@@ -155,7 +156,7 @@ music-mixer/
 │   │   ├── lib/                  # persist, cache, fetch, cookies
 │   │   ├── middleware/           # auth, rateLimiter, telemetry
 │   │   ├── routes/               # 7 API routers
-│   │   ├── math/                 # vectors, similarity, genres, insights
+│   │   ├── analytics/                 # vectors, similarity, genres, insights
 │   │   ├── collision/            # engine, store, history
 │   │   ├── spotify/              # auth, client, tracks, taste, genreModel, build, veto, export
 │   │   ├── services/             # session, friends, ghosts, dashboard, habits
@@ -300,12 +301,12 @@ Global middleware: telemetry (`X-Response-Time` header), rate limiter (60 burst 
 
 ## Mathematical models
 
-### Vector operations (`math/vector.ts`)
+### Vector operations (`analytics/vector.ts`)
 
 - `weightedCentroid(vectors, weights)` — multi-user taste centroid
 - `weightedBlend`, `midpoint`, `averageVectors`
 
-### Cosine similarity (`math/similarity.ts`)
+### Cosine similarity (`analytics/similarity.ts`)
 
 Mean-centered Pearson-like correlation mapped to [0, 1]:
 
@@ -334,7 +335,7 @@ similarity = (correlation + 1) / 2
 
 **Macro-category penalty** — genres grouped into Electronic, Rock, Hip-Hop, Regional, Acoustic. Culturally distant macro pairs reduce similarity (multipliers: same 1.0, adjacent 0.85, distant 0.65).
 
-### Listening time estimation (`math/listening.ts`)
+### Listening time estimation (`analytics/listening.ts`)
 
 Geometric decay by rank within each time window (Spotify does not expose true play counts):
 
@@ -618,5 +619,5 @@ Vercel will handle the rest, building the `frontend` workspace and serving your 
 | `services/ghosts.ts` | Ghost persona reader |
 | `services/session.ts` | OAuth session management |
 | `lib/persist.ts` | JSON file I/O |
-| `math/similarity.ts` | Cosine similarity + labels |
+| `analytics/similarity.ts` | Cosine similarity + labels |
 | `frontend/src/hooks/useCollision.ts` | Collision state machine |
