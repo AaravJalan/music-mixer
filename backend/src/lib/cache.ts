@@ -7,8 +7,8 @@ const ARTIST_GENRES_TTL = 30 * 24 * 60 * 60; // 30 days
 const DASHBOARD_TTL = 24 * 60 * 60;           // 24 hours
 const TASTE_PROFILE_TTL = 3 * 60 * 60;        // 3 hours
 
-const DASHBOARD_CACHE_VERSION = 'v19';
-const TASTE_PROFILE_CACHE_VERSION = 'v5';
+const DASHBOARD_CACHE_VERSION = 'v20';
+const TASTE_PROFILE_CACHE_VERSION = 'v6';
 
 // ─── Key helpers ──────────────────────────────────────────────────────────────
 const artistGenresKey = (artistId: string) => `artist_genres:${artistId}`;
