@@ -44,8 +44,32 @@ async function fetchArtistsBatch(
         if (artist?.id) map.set(artist.id, artist);
       }
     } catch (e) {
-      console.error(`Failed to fetch artist batch: ${e}`);
-      // skip failed batch — placeholders will render
+      console.warn(`Batch of ${batch.length} failed, retrying in chunks of 5...`);
+      for (let j = 0; j < batch.length; j += 5) {
+        const subBatch = batch.slice(j, j + 5);
+        try {
+          const data2 = await spotifyFetch<SpotifyArtistsBatchResponse>(sessionId, '/artists', {
+            ids: subBatch.join(','),
+          });
+          for (const artist of data2.artists ?? []) {
+            if (artist?.id) map.set(artist.id, artist);
+          }
+        } catch (e2) {
+          console.warn(`Sub-batch of ${subBatch.length} failed, retrying individually...`);
+          for (const id of subBatch) {
+            try {
+              const data3 = await spotifyFetch<SpotifyArtistsBatchResponse>(sessionId, '/artists', {
+                ids: id,
+              });
+              for (const artist of data3.artists ?? []) {
+                if (artist?.id) map.set(artist.id, artist);
+              }
+            } catch (e3) {
+              console.error(`Failed to fetch artist ${id}`);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -166,12 +190,13 @@ function supplementFromTracks(
   tracks: TopTrack[],
   artistGenreMap: Map<string, string[]>,
   weighted: WeightedGenre[],
+  topArtistIds: Set<string>,
 ): WeightedGenre[] {
   const result = [...weighted];
 
   for (let i = 0; i < tracks.length; i++) {
     const track = tracks[i];
-    const w = rankWeight(i, tracks.length) * 0.5;
+    const w = rankWeight(i, tracks.length) * 0.2; // Gentle modifier
     const trackGenres = inferGenresFromText(track.name, track.artist);
 
     for (const genre of trackGenres) {
@@ -183,9 +208,13 @@ function supplementFromTracks(
         const inferred = inferGenresFromText(track.artist, track.name);
         if (inferred.length > 0) artistGenreMap.set(artistId, inferred);
       }
-      const genres = artistGenreMap.get(artistId) ?? inferGenresFromText(track.artist);
-      for (const genre of genres) {
-        result.push({ genre, weight: w * 0.5 });
+      
+      // Only supplement artist genres if they aren't already massively counted in top 100 artists
+      if (!topArtistIds.has(artistId)) {
+        const genres = artistGenreMap.get(artistId) ?? inferGenresFromText(track.artist);
+        for (const genre of genres) {
+          result.push({ genre, weight: w });
+        }
       }
     }
   }
@@ -219,21 +248,25 @@ function artistsFromTracks(tracks: TopTrack[]): SpotifyArtist[] {
     }));
 }
 
+const sessionLocks = new Map<string, Promise<any>>();
+
 export function buildUserTasteProfile(
   sessionId: string,
   timeRange: TasteTimeRange = 'medium_term',
-  genreDisplayLimit = 15,
+  genreDisplayLimit = 50,
 ): Promise<UserTasteProfile> {
-  const cacheKey = `${sessionId}:${timeRange}:${genreDisplayLimit}`;
+  const cacheKey = `${sessionId}:${timeRange}`;
   const cached = profileCache.get(cacheKey);
   if (cached && Date.now() - cached.at < PROFILE_CACHE_TTL) {
     return cached.promise;
   }
   
-  const promise = doBuildUserTasteProfile(sessionId, timeRange, genreDisplayLimit);
+  const lock = sessionLocks.get(sessionId) || Promise.resolve();
+  const promise = lock.then(() => doBuildUserTasteProfile(sessionId, timeRange, genreDisplayLimit));
+  
+  sessionLocks.set(sessionId, promise.catch(() => {}));
   profileCache.set(cacheKey, { at: Date.now(), promise });
   
-  // Clear from cache on failure so subsequent calls can retry
   promise.catch(() => profileCache.delete(cacheKey));
   
   return promise;
@@ -287,12 +320,34 @@ async function doBuildUserTasteProfile(
       seen.add(item.id);
       return true;
     });
+
+    if (artists.length < 100 && tracks.length > 0) {
+      const derived = artistsFromTracks(tracks);
+      const missing = derived.filter((d) => !seen.has(d.id));
+      const needed = 100 - artists.length;
+      const toFetch = missing.slice(0, needed);
+      
+      if (toFetch.length > 0) {
+        const details = await fetchArtistsBatch(sessionId, toFetch.map((a) => a.id));
+        const padded = toFetch.map((a) => {
+          const detail = details.get(a.id);
+          if (!detail) return a;
+          return {
+            ...a,
+            images: detail.images ?? a.images,
+            genres: safeGenres(detail.genres).length > 0 ? detail.genres : a.genres,
+          };
+        });
+        artists.push(...padded);
+      }
+    }
   }
 
   const artistGenreMap = await enrichArtistGenres(sessionId, artists);
 
   let weightedGenres = collectWeightedGenres(artists, artistGenreMap);
-  weightedGenres = supplementFromTracks(tracks, artistGenreMap, weightedGenres);
+  const topArtistIds = new Set(artists.map((a) => a.id));
+  weightedGenres = supplementFromTracks(tracks, artistGenreMap, weightedGenres, topArtistIds);
 
   const vector = computeWeightedTasteVector(weightedGenres);
   const genres = aggregateWeightedGenres(weightedGenres, genreDisplayLimit);

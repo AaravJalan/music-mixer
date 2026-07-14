@@ -62,7 +62,7 @@ export async function getDashboardAnalytics(
         name: artist.name,
         imageUrl: artist.imageUrl,
         rank: i + 1,
-        primaryGenre: genres[0] ? formatGenre(genres[0]) : null,
+        genres: genres.slice(0, 3).map(formatGenre),
         trackCount: artistTrackCounts.get(artist.id) ?? 0,
       };
     });
@@ -92,9 +92,7 @@ export async function getDashboardAnalytics(
   const estimatedListeningHours = estimateListeningHoursFromTopTracks(profile.tracks, term);
   const estimatedTotalPlays = estimateTotalPlays(term, profile.tracks.length);
 
-  const uniqueGenreCount = new Set(
-    [...profile.artistGenreMap.values()].flat().map((g) => g.toLowerCase()),
-  ).size;
+  const uniqueGenreCount = profile.genres.length;
 
   const tracksWithDuration = profile.tracks.filter((t) => (t.durationMs ?? 0) > 0);
   const avgTrackLengthMin = tracksWithDuration.length > 0

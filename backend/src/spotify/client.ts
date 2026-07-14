@@ -74,9 +74,11 @@ export async function spotifyFetch<T>(
     }
 
     if (res.status === 403) {
-      // App-level ban — lock all instances for a short cooling-off period.
-      await redis.set(API_LOCK_KEY, 'locked', { ex: FORBIDDEN_LOCK_TTL_S });
       const body = await res.text();
+      // Only lock if it explicitly indicates a rate limit or app ban
+      if (body.toLowerCase().includes('rate limit') || body.toLowerCase().includes('ban')) {
+        await redis.set(API_LOCK_KEY, 'locked', { ex: FORBIDDEN_LOCK_TTL_S });
+      }
       throw new SpotifyApiError(`Spotify API ${path} forbidden: ${body}`, 403);
     }
 

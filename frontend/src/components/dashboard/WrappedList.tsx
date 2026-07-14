@@ -66,8 +66,8 @@ export function TopArtistsList({ artists }: { artists: DashboardTopArtist[] }) {
             )}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{artist.name}</p>
-              {artist.primaryGenre && (
-                <p className="text-[11px] text-white/40 truncate">{artist.primaryGenre}</p>
+              {artist.genres && artist.genres.length > 0 && (
+                <p className="text-[11px] text-white/40 truncate">{artist.genres.join(', ')}</p>
               )}
             </div>
           </li>
@@ -108,7 +108,7 @@ export function TopTracksList({ tracks }: { tracks: DashboardTopTrack[] }) {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{track.name}</p>
               <p className="text-[11px] text-white/40 truncate">
-                {track.artist} · score {track.playScore}
+                {track.artist}
               </p>
             </div>
           </li>

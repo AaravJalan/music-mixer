@@ -1,4 +1,4 @@
-import { chunkInterleave } from './backend/src/spotify/build';
+import { chunkInterleave } from '../src/spotify/build';
 
 const pool0 = [
   { id: '1', name: 'A' },

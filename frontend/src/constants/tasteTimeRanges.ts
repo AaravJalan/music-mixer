@@ -3,7 +3,6 @@ import type { TasteTimeRange } from '@music-mixer/shared';
 export const TASTE_TIME_RANGE_OPTIONS: { value: TasteTimeRange; label: string; short: string }[] = [
   { value: 'short_term', label: '4 weeks', short: '4w' },
   { value: 'medium_term', label: '6 months', short: '6m' },
-  { value: 'year_to_date', label: 'This year', short: 'YTD' },
   { value: 'long_term', label: 'All time', short: 'All' },
 ];
 

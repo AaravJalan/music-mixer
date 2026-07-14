@@ -196,18 +196,68 @@ function dominantMacroCategory(genres: GenreStat[]): MacroCategory | null {
   return best;
 }
 
-export function macroPenaltyMultiplier(genresA: GenreStat[], genresB: GenreStat[]): number {
-  const macroA = dominantMacroCategory(genresA);
-  const macroB = dominantMacroCategory(genresB);
+interface MacroInfo {
+  macro: MacroCategory;
+  isPrimary: boolean;
+}
 
-  if (!macroA || !macroB) {
+function coDominantMacros(genres: GenreStat[]): MacroInfo[] {
+  if (genres.length === 0) return [];
+  const scores = new Map<MacroCategory, number>();
+  let total = 0;
+  for (const g of genres) {
+    const macro = resolveMacroCategory(g.genre) as MacroCategory;
+    const val = g.percentage || g.count || 1;
+    scores.set(macro, (scores.get(macro) ?? 0) + val);
+    total += val;
+  }
+  
+  let bestScore = -1;
+  let bestMacro: MacroCategory | null = null;
+  for (const [macro, score] of scores) {
+    if (score > bestScore) {
+      bestScore = score;
+      bestMacro = macro;
+    }
+  }
+  
+  if (!bestMacro) return [];
+  
+  const results: MacroInfo[] = [];
+  results.push({ macro: bestMacro, isPrimary: true });
+  
+  for (const [macro, score] of scores) {
+    if (macro !== bestMacro && total > 0 && (score / total) >= 0.15) {
+      results.push({ macro, isPrimary: false });
+    }
+  }
+  
+  return results;
+}
+
+export function macroPenaltyMultiplier(genresA: GenreStat[], genresB: GenreStat[]): number {
+  const macrosA = coDominantMacros(genresA);
+  const macrosB = coDominantMacros(genresB);
+
+  if (macrosA.length === 0 || macrosB.length === 0) {
     console.warn(
       '[macroPenalty] Missing genre data for macro analysis — applying distant fallback (0.65x)',
     );
     return 0.65;
   }
 
-  return macroDistanceMultiplier(macroA, macroB);
+  let bestMultiplier = 0;
+  for (const a of macrosA) {
+    for (const b of macrosB) {
+      let scale = 1.0;
+      if (!a.isPrimary && !b.isPrimary) scale = 0.85;
+      else if (!a.isPrimary || !b.isPrimary) scale = 0.90;
+
+      const mult = macroDistanceMultiplier(a.macro, b.macro) * scale;
+      if (mult > bestMultiplier) bestMultiplier = mult;
+    }
+  }
+  return bestMultiplier;
 }
 
 function applyMacroPenalty(baseSimilarity: number, multiplier: number): number {

@@ -570,7 +570,7 @@ Authenticated `spotifyFetch()` with automatic token refresh. Retries 429 only wh
 
 | Concern | Implementation |
 |---------|----------------|
-| Token storage | Server-side JSON files; never sent to frontend |
+| Token storage | Upstash Redis; never sent to frontend |
 | Session cookie | HTTP-only `mm_session` |
 | OAuth CSRF | `state` parameter validated in callback |
 | Rate limiting | Per-IP token bucket (exempt auth/health) |

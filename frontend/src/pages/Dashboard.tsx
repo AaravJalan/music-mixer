@@ -37,6 +37,28 @@ export function Dashboard({ user }: DashboardProps) {
   const activeTerm = TERM_OPTIONS.find((t) => t.value === term);
 
   useEffect(() => {
+    // Background prefetch for all other terms + listening habits
+    const timer = setTimeout(async () => {
+      const allTerms: TasteTimeRange[] = ['short_term', 'medium_term', 'year_to_date', 'long_term'];
+      for (const t of allTerms) {
+        if (!cache[t]) {
+          try {
+            const data = await api.getDashboard(t);
+            setCache(prev => ({ ...prev, [t]: data }));
+          } catch {
+            // ignore prefetch errors
+          }
+        }
+      }
+      try {
+        await api.getListeningHabits('medium_term');
+      } catch {}
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     if (cache[term]) {
       setLoading(false);
       setTermLoading(false);
@@ -47,23 +69,28 @@ export function Dashboard({ user }: DashboardProps) {
     setTermLoading(true);
     if (Object.keys(cache).length === 0) setLoading(true);
 
-    api.getDashboard(term)
-      .then((dash) => {
-        if (cancelled || dash.term !== term) return;
-        setCache((prev) => ({ ...prev, [term]: dash }));
-        setError(null);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-          setTermLoading(false);
-        }
-      });
+    const timer = setTimeout(() => {
+      api.getDashboard(term)
+        .then((dash) => {
+          if (cancelled || dash.term !== term) return;
+          setCache((prev) => ({ ...prev, [term]: dash }));
+          setError(null);
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoading(false);
+            setTermLoading(false);
+          }
+        });
+    }, 400);
 
-    return () => { cancelled = true; };
+    return () => { 
+      cancelled = true;
+      clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [term]);
 

@@ -7,3 +7,8 @@ build/
 *.log
 .DS_Store
 .sst/
+
+# Scratch and data
+scratch*
+.data
+

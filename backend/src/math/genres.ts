@@ -1,4 +1,5 @@
 import type { GenreStat } from '@music-mixer/shared';
+import { mapToParentGenre } from '../spotify/genreMapper';
 
 interface WeightedGenreInput {
   genre: string;
@@ -11,18 +12,20 @@ export function aggregateWeightedGenres(weighted: WeightedGenreInput[], limit = 
 
   for (const { genre, weight } of weighted) {
     if (!genre || weight <= 0) continue;
-    totals.set(genre, (totals.get(genre) ?? 0) + weight);
+    const parentGenre = mapToParentGenre(genre);
+    totals.set(parentGenre, (totals.get(parentGenre) ?? 0) + weight);
   }
 
   const grandTotal = [...totals.values()].reduce((sum, n) => sum + n, 0) || 1;
   return [...totals.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
     .map(([genre, count]) => ({
       genre,
       count: Math.round(count * 10) / 10,
       percentage: Math.round((count / grandTotal) * 100),
-    }));
+    }))
+    .filter(g => g.percentage > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 }
 
 /** Genres appearing in all participants' top genre lists. */

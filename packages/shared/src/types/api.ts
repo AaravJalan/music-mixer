@@ -123,7 +123,7 @@ export interface DashboardTopArtist {
   name: string;
   imageUrl: string;
   rank: number;
-  primaryGenre: string | null;
+  genres: string[];
   /** Tracks by this artist in the user's top tracks for the time range. */
   trackCount: number;
 }

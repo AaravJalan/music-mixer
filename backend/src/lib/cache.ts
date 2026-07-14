@@ -7,14 +7,15 @@ const ARTIST_GENRES_TTL = 30 * 24 * 60 * 60; // 30 days
 const DASHBOARD_TTL = 24 * 60 * 60;           // 24 hours
 const TASTE_PROFILE_TTL = 3 * 60 * 60;        // 3 hours
 
-const DASHBOARD_CACHE_VERSION = 'v5';
+const DASHBOARD_CACHE_VERSION = 'v19';
+const TASTE_PROFILE_CACHE_VERSION = 'v5';
 
 // ─── Key helpers ──────────────────────────────────────────────────────────────
 const artistGenresKey = (artistId: string) => `artist_genres:${artistId}`;
 const dashboardKey = (userId: string, term: TasteTimeRange) =>
   `dashboard:${userId}:${term}:${DASHBOARD_CACHE_VERSION}`;
 const tasteProfileKey = (userId: string, term: TasteTimeRange) =>
-  `taste_profile:${userId}:${term}`;
+  `taste_profile:${userId}:${term}:${TASTE_PROFILE_CACHE_VERSION}`;
 
 // ─── Artist Genres Cache ──────────────────────────────────────────────────────
 

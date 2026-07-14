@@ -1,5 +1,5 @@
-import { chunkInterleave } from './backend/src/spotify/build';
-import { RecommendationTrack, PlaylistSeenState } from './backend/src/spotify/build'; // I need to mock these
+import { chunkInterleave } from '../src/spotify/build';
+import { RecommendationTrack, PlaylistSeenState } from '../src/spotify/build'; // I need to mock these
 
 // Mock RecommendationTrack
 const pool = Array.from({ length: 50 }).map((_, i) => ({

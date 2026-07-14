@@ -1,6 +1,6 @@
 /** Regional genre buckets prone to language barriers (non-English). */
 export const LANGUAGE_VETO_BUCKETS: Record<string, string[]> = {
-  hindi: ['bollywood', 'desi pop', 'filmi', 'punjabi', 'indian'],
+  hindi: ['bollywood', 'desi pop', 'filmi', 'punjabi', 'indian', 'tamil', 'telugu', 'sufi', 'ghazal'],
   spanish: ['latin', 'reggaeton', 'urbano', 'latin pop', 'salsa'],
   french: ['french pop', 'french hip hop', 'chanson'],
   latin: ['latin', 'latin rock', 'latin hip hop'],

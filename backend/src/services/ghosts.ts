@@ -1,6 +1,7 @@
 import type { GhostProfile, GenreStat } from '@music-mixer/shared';
 import type { ProfileArtist } from '../spotify/taste';
 import ghostProfilesData from '../mock/ghost-profiles.json';
+import { mapToParentGenre } from '../spotify/genreMapper';
 interface GhostDefinition {
   id: string;
   displayName: string;
@@ -154,11 +155,17 @@ export function isGhostUserId(id: string): boolean {
 }
 
 export function ghostGenresToStats(genres: string[]): GenreStat[] {
-  const clean = cleanGenreList(genres);
-  const total = clean.length || 1;
-  return clean.map((genre, i) => ({
+  if (genres.length === 0) return [];
+  
+  // Convert ghost micro-genres to the new macro-genres
+  const mappedGenres = [...new Set(genres.map(mapToParentGenre))];
+  
+  const base = Math.floor(100 / mappedGenres.length);
+  const remainder = 100 % mappedGenres.length;
+  
+  return mappedGenres.map((genre, i) => ({
     genre,
-    count: clean.length - i,
-    percentage: Math.round((1 / total) * 100),
+    percentage: i === 0 ? base + remainder : base,
+    count: 10 - i, // fake count for sorting
   }));
 }
