@@ -4,9 +4,12 @@ import type {
   DashboardTopTrack,
   TasteTimeRange,
 } from '@music-mixer/shared';
-import { buildDashboardInsights } from '../analytics/insights';
-import { findSonicOutlier } from '../analytics/outlier';
-import { estimateListeningHoursFromTopTracks, estimateTotalPlays } from '../analytics/listening';
+import {
+  buildDashboardInsights,
+  estimateListeningHoursFromTopTracks,
+  estimateTotalPlays,
+  findSonicOutlier,
+} from '../analytics/insights';
 import { getCachedDashboard, setCachedDashboard } from '../lib/cache';
 import { buildUserTasteProfile } from '../spotify/taste';
 

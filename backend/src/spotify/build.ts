@@ -524,7 +524,7 @@ function applyLinguisticVetoToGenreStats(
       pool.some((g) => isRegionalGenre(g.genre)),
     );
     if (hasSharedRegional) {
-      console.log('[cultural-override] Shared regional artists detected — skipping linguistic veto');
+      // console.log('[cultural-override] Shared regional artists detected — skipping linguistic veto');
       return genreStatPools;
     }
   }
@@ -534,7 +534,7 @@ function applyLinguisticVetoToGenreStats(
   return genreStatPools.map((pool, index) => {
     // If this participant has > 80% blend weight, don't veto their genres
     if (blendWeights && blendWeights[index] > 80) {
-      console.log(`[cultural-override] Participant ${index} has ${blendWeights[index]}% weight (> 80%) — preserving their genres`);
+      // console.log(`[cultural-override] Participant ${index} has ${blendWeights[index]}% weight (> 80%) — preserving their genres`);
       return pool;
     }
     const allowed = new Set(vetoed[index]);
@@ -1142,9 +1142,9 @@ export async function buildMultiCollisionPlaylist(
   };
 
   // --- Stage 1: Exact common favorites (strict intersection of top tracks) ---
-  if (input.trackPools.length > 0 && input.trackPools[0].length > 0) {
-    console.log("Track Normalization Check:", normalizeSpotifyId(input.trackPools[0][0].id));
-  }
+  // if (input.trackPools.length > 0 && input.trackPools[0].length > 0) {
+  //   console.log("Track Normalization Check:", normalizeSpotifyId(input.trackPools[0][0].id));
+  // }
 
   const exactOverlap = dedupeOverlapTracks(
     overlappingTracksMulti(input.trackPools).map((t) => {
@@ -1163,7 +1163,7 @@ export async function buildMultiCollisionPlaylist(
       tryAddTrackToBucket(track, results);
     }
   }
-  console.log(`Stage 1: Common Favorites — ${results.length} tracks`);
+  // console.log(`Stage 1: Common Favorites — ${results.length} tracks`);
 
   // Common Songs Only — strict intersection, no discovery stages.
   if (effectiveMode === 'common_only') {
@@ -1173,7 +1173,7 @@ export async function buildMultiCollisionPlaylist(
     if (input.playlistLengthMode === 'duration' && input.targetDurationMs) {
       tracks = trimPlaylistToDuration(tracks, input.targetDurationMs);
     }
-    console.log(`[common_only] Returning ${tracks.length} shared tracks (no discovery)`);
+    // console.log(`[common_only] Returning ${tracks.length} shared tracks (no discovery)`);
     return {
       tracks,
       usedFallback: false,
@@ -1215,11 +1215,12 @@ export async function buildMultiCollisionPlaylist(
   }
 
   // --- Tier 1: Midpoint = search-first (Safe-Discovery) ---
-  const tier1Start = searched.length + results.length;
+  const tier1Start = searched.length + results.length; // used by commented Tier 1 log below
+  void tier1Start;
   if (searched.length + results.length < targetLength) {
     if (effectiveMode === 'midpoint') {
       if (!discoveryAvailable()) {
-        console.log('[Tier 1] Midpoint Search Skipped: Circuit Breaker Active');
+        // console.log('[Tier 1] Midpoint Search Skipped: Circuit Breaker Active');
       } else {
         // Single centroid-genre query only (no loops). If it fails with 403/429, breaker trips
         // inside searchTracks and we fall back to local/emergency tiers.
@@ -1245,12 +1246,12 @@ export async function buildMultiCollisionPlaylist(
         for (const seed of querySeeds) {
           if (searched.length + results.length >= targetLength) break;
           if (!discoveryAvailable()) {
-            console.log('[Tier 1] Midpoint Search Stopped: Circuit Breaker Active');
+            // console.log('[Tier 1] Midpoint Search Stopped: Circuit Breaker Active');
             break;
           }
           const query = buildMultiGenreQuery([seed]);
           searchCalls += 1;
-          console.log(`[Tier 1] Midpoint Search: ${query} (${searchCalls}/3)`);
+          // console.log(`[Tier 1] Midpoint Search: ${query} (${searchCalls}/3)`);
           try {
             const found = await searchTracks(
               input.sessionId,
@@ -1281,17 +1282,17 @@ export async function buildMultiCollisionPlaylist(
       results.push(...interleaved.slice(0, Math.max(0, targetLength - (searched.length + results.length))));
     }
   }
-  console.log(`[Tier 1] Added ${(searched.length + results.length) - tier1Start} tracks (now ${searched.length + results.length}/${targetLength})`);
+  // console.log(`[Tier 1] Added ${(searched.length + results.length) - tier1Start} tracks (now ${searched.length + results.length}/${targetLength})`);
 
   // --- Tier 2: ONE safe search call (only if still short and API not locked) ---
   if (results.length < targetLength) {
     // Midpoint is search-only: Tier 1 is the single allowed search request.
     // If it didn't fill, we go straight to emergency baseline (Tier 3).
     if (effectiveMode === 'midpoint') {
-      console.log('[Tier 2] Skipped: Midpoint uses Tier 1 search budget');
+      // console.log('[Tier 2] Skipped: Midpoint uses Tier 1 search budget');
     } else
     if (!discoveryAvailable()) {
-      console.log('[Tier 2] API Stage Skipped: Circuit Breaker Active');
+      // console.log('[Tier 2] API Stage Skipped: Circuit Breaker Active');
     } else {
       const remaining = targetLength - results.length;
       const searchable = resolveSearchableGenres(vetoedGenreStatPools);
@@ -1303,7 +1304,7 @@ export async function buildMultiCollisionPlaylist(
         nonDefault.find((g) => sharedRegionalTokens.has(regionalTokens(g)[0] ?? '')) ??
         'pop';
       const query = buildGenreQuery(pick);
-      console.log(`[Tier 2] Search Fallback: ${query} (one request)`);
+      // console.log(`[Tier 2] Search Fallback: ${query} (one request)`);
       try {
         const found = await searchTracks(
           input.sessionId,
@@ -1317,7 +1318,7 @@ export async function buildMultiCollisionPlaylist(
         }
       } catch (err) {
         // searchTracks already trips breaker on 403/429; fall through to Tier 3.
-        console.log('[Tier 2] Search failed — falling back to emergency baseline');
+        // console.log('[Tier 2] Search failed — falling back to emergency baseline');
       }
     }
   }
@@ -1327,7 +1328,7 @@ export async function buildMultiCollisionPlaylist(
 
   // --- Tier 3: Emergency fill to hit target safely ---
   if (tracks.length < targetLength) {
-    console.log(`[Tier 3] Emergency baseline: ${tracks.length}/${targetLength} — seeding from local top tracks`);
+    // console.log(`[Tier 3] Emergency baseline: ${tracks.length}/${targetLength} — seeding from local top tracks`);
     const baseline = emergencyBaselineTracksForTarget(input.trackPools, targetLength * 3, sessionSeed);
     const emergencyState: PlaylistSeenState = { ids: new Set(), seenTracks: new Set(), culturalGuardrail };
     for (const t of tracks) registerTrack(t, emergencyState);
@@ -1371,18 +1372,18 @@ export async function buildMultiCollisionPlaylist(
     tracks = tracks.slice(0, targetLength);
   }
 
-  if (guardrailApplied) {
-    console.info(
-      `[recommendations] Match ${(input.compatibilityScore * 100).toFixed(1)}% < 80% — ` +
-      'forced Equal Share playlist generation',
-    );
-  }
-
-  console.log(
-    input.playlistLengthMode === 'duration'
-      ? `[length] Duration target ${(input.targetDurationMs ?? 0) / 60000}m → ${tracks.length} tracks, ${(tracks.reduce((s, t) => s + (t.durationMs ?? DEFAULT_TRACK_DURATION_MS), 0) / 60000).toFixed(1)}m`
-      : `[length] Track target ${targetLength} → ${tracks.length} tracks`,
-  );
+  // if (guardrailApplied) {
+  //   console.info(
+  //     `[recommendations] Match ${(input.compatibilityScore * 100).toFixed(1)}% < 80% — ` +
+  //     'forced Equal Share playlist generation',
+  //   );
+  // }
+  //
+  // console.log(
+  //   input.playlistLengthMode === 'duration'
+  //     ? `[length] Duration target ${(input.targetDurationMs ?? 0) / 60000}m → ${tracks.length} tracks, ${(tracks.reduce((s, t) => s + (t.durationMs ?? DEFAULT_TRACK_DURATION_MS), 0) / 60000).toFixed(1)}m`
+  //     : `[length] Track target ${targetLength} → ${tracks.length} tracks`,
+  // );
 
   return {
     tracks,

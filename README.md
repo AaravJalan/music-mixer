@@ -1,41 +1,57 @@
 # MusicMixer
 
-**Spotify Taste Collision Engine** — compare up to four listeners' musical taste in a six-dimensional feature space, compute compatibility scores, and assemble shared playlists through a deterministic, ID-anchored pipeline with cultural guardrails and Safe-Discovery search constraints.
+**Spotify Taste Collision Engine:** a full-stack platform that maps upto four listeners into a six-dimensional taste space, scores multi-user compatibility, and builds shared playlists with cultural guardrails and rate-limit-safe Spotify discovery.
 
-## Quick start
+## Why it exists
+
+Spotify does not expose true “taste distance” or shared-playlist APIs for arbitrary friend groups. MusicMixer fills that gap: OAuth into Spotify, build ID-anchored taste profiles, collide up to four listeners (live users and/or ghost personas), and export a playlist back to Spotify.
+
+## Quick start (local)
 
 ```bash
 npm install
-npm run dev
+cp backend/.env.example .env   # fill Spotify + Upstash credentials
+npm run dev                      # frontend :5173 + local Express API :3001
 ```
 
 | Service | URL |
 |---------|-----|
 | Frontend | `http://127.0.0.1:5173` |
-| Backend API | `http://127.0.0.1:3001/api` (Local Express) or `https://<api-id>.lambda-url.<region>.on.aws` (SST Lambda) |
+| Backend API | `http://127.0.0.1:3001/api` |
 
-Use `http://127.0.0.1:5173` (not `localhost`) for Spotify OAuth cookie consistency.
+Use `http://127.0.0.1:5173` (not `localhost`) so Spotify OAuth cookies stay consistent. Whitelist the exact redirect URI in the Spotify Developer Dashboard.
 
 ### Build
 
 ```bash
 npm run build
-# Builds @music-mixer/shared, then backend (tsc), then frontend (tsc + vite)
+# Builds @music-mixer/shared → backend (tsc) → frontend (tsc + vite)
 ```
 
 ### Environment
 
-Create `.env` at the repo root (see `.env.example`):
+Copy `backend/.env.example` to a root `.env` (or `backend/.env` — both are loaded):
 
 | Variable | Required | Default |
 |----------|----------|---------|
 | `SPOTIFY_CLIENT_ID` | Yes | — |
 | `SPOTIFY_CLIENT_SECRET` | Yes | — |
 | `SPOTIFY_REDIRECT_URI` | Yes | — |
-| `PORT` | No | `3001` (For local Express) |
+| `PORT` | No | `3001` |
 | `FRONTEND_URL` | No | `http://127.0.0.1:5173` |
 | `UPSTASH_REDIS_REST_URL` | Yes | — |
 | `UPSTASH_REDIS_REST_TOKEN` | Yes | — |
+| `LISTENING_HABITS_TABLE` | Local habits | Deployed DynamoDB table name (when not using `sst dev`) |
+
+### Production vs Local
+
+| Mode | Frontend | Backend | Notes |
+|------|----------|---------|-------|
+| **Local** | Vite on `:5173` | Express via `backend/src/local.ts` | Vite proxies `/api` → `:3001` |
+| **Production** | Vercel static SPA | SST → AWS Lambda Function URL | Vercel rewrites `/api/*` to Lambda; Redis + DynamoDB shared |
+
+Deploy backend: `npx sst deploy --stage <your-stage>`
+Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @music-mixer/shared && npm run build`, and rewrites in `vercel.json`.
 
 ---
 
@@ -77,11 +93,11 @@ Create `.env` at the repo root (see `.env.example`):
 ### Dashboard & analytics
 
 - Personal taste radar (6D feature vector)
-- **Rule-based Lexical Genre Inference Engine** — fallback heuristic parsing for metadata gaps
+- **Rule-based Lexical Genre Inference Engine** — keyword / known-artist heuristics when Spotify returns empty genres
 - Top genres, artists, and tracks
 - Narrative listening insights and sonic outlier detection
 - Estimated listening hours and play counts
-- **Listening Habits** page — genre pie chart and daily listening line chart
+- **Listening Habits** — genre distribution plus cron-backed listening snapshots (DynamoDB, every 3 days)
 
 ### Friends & ghosts
 
@@ -99,13 +115,13 @@ Create `.env` at the repo root (see `.env.example`):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         Frontend (React + Vite)                         │
-│  Port 5173 · HTTP-only session cookie (or local proxy to API)           │
+│                    Frontend (React + Vite → Vercel)                     │
+│         SPA · HTTP-only session cookie · /api rewrite to Lambda         │
 └───────────────────────────────────┬─────────────────────────────────────┘
                                     │ REST + credentials
 ┌───────────────────────────────────▼─────────────────────────────────────┐
-│                      Backend API (AWS Lambda)                           │
-│  SST v3 · Express via serverless-http · Collision · Spotify · Math      │
+│              Backend (Express → AWS Lambda via SST / serverless-http)     │
+│         Collision engine · Spotify clients · Analytics · Workers        │
 └───────────┬─────────────────────────────┬─────────────────────────────┘
             │                             │
 ┌───────────▼──────────┐      ┌───────────▼──────────────────────────────┐
@@ -123,6 +139,7 @@ Create `.env` at the repo root (see `.env.example`):
 - **ID-first matching** — track and artist intersections use Spotify entity IDs
 - **Genre-estimated vectors** — 6D taste vectors derived from weighted anchor-genre profiles
 - **Safe-Discovery** — capped `/search` calls per playlist build; circuit breaker on rate limits
+- **Cache-aside** — Redis caches dashboards, artist genres, and taste profiles; DynamoDB stores habit snapshots
 - **Deterministic deduplication** — canonical keys collapse remix/version variants to one slot
 - **Cultural guardrails** — regional genres only included when shared-safe across all participants
 
@@ -133,13 +150,14 @@ Create `.env` at the repo root (see `.env.example`):
 | Layer | Technology |
 |-------|------------|
 | Language | TypeScript 5.7 |
-| Backend | AWS Lambda + serverless-http (deployed via SST v3) |
-| Local API | Node.js, Express 4, tsx (via `local.ts`) |
+| Backend | AWS Lambda + serverless-http (SST v3) |
+| Local API | Node.js, Express 4, tsx (`local.ts`) |
 | Frontend | React 18, Vite 6, Tailwind 3, Framer Motion |
 | Router | React Router 7 |
-| Monorepo | npm workspaces (`packages/shared`, `backend`, `frontend`) |
-| Persistence| AWS DynamoDB (Habits), Upstash Redis (Sessions/Caches) |
+| Monorepo | npm workspaces (`shared`, `backend`, `frontend`) |
+| Persistence | DynamoDB (listening habits), Upstash Redis (sessions / caches) |
 | Auth | Spotify OAuth 2.0, HTTP-only `mm_session` cookie |
+| Infra | SST (Lambda, DynamoDB, SQS, EventBridge cron) + Vercel (SPA) |
 
 ---
 
@@ -149,21 +167,21 @@ Create `.env` at the repo root (see `.env.example`):
 music-mixer/
 ├── package.json
 ├── sst.config.ts                 # Infrastructure as Code (AWS via SST v3)
-├── packages/shared/              # @music-mixer/shared types & constants
+├── shared/                       # @music-mixer/shared types & constants
 ├── backend/
 │   ├── src/
 │   │   ├── config/env.ts         # Environment + Spotify URLs/scopes
 │   │   ├── lib/                  # persist, cache, fetch, cookies
 │   │   ├── middleware/           # auth, rateLimiter, telemetry
 │   │   ├── routes/               # 7 API routers
-│   │   ├── analytics/                 # vectors, similarity, genres, insights
+│   │   ├── analytics/            # vectors, similarity, genres, insights
 │   │   ├── collision/            # engine, store, history
-│   │   ├── spotify/              # auth, client, tracks, taste, genreModel, build, veto, export
+│   │   ├── spotify/              # auth, client, tracks, taste, genreModel, inference, build, veto, export
 │   │   ├── services/             # session, friends, ghosts, dashboard, habits
-│   │   ├── workers/              # AWS Lambda queue processors and cron jobs
+│   │   ├── workers/              # SQS processor + 3-day habits cron
 │   │   ├── lambda.ts             # AWS Lambda entrypoint for Express
 │   │   └── local.ts              # Local Express development entrypoint
-│   └── scripts/generateGhosts.ts
+│   └── scripts/                  # ghost hydration, API unlock, DB wipe
 └── frontend/src/
     ├── api/client.ts
     ├── components/               # collision, dashboard, layout, ui
@@ -335,9 +353,9 @@ similarity = (correlation + 1) / 2
 
 **Macro-category penalty** — genres grouped into Electronic, Rock, Hip-Hop, Regional, Acoustic. Culturally distant macro pairs reduce similarity (multipliers: same 1.0, adjacent 0.85, distant 0.65).
 
-### Listening time estimation (`analytics/listening.ts`)
+### Listening time estimation (`analytics/insights.ts`)
 
-Geometric decay by rank within each time window (Spotify does not expose true play counts):
+Geometric decay by rank within each time window for dashboard estimates (Spotify does not expose true play counts). Cron habit snapshots instead sum **recently-played** durations between captures:
 
 ```
 plays(rank) = topPlays × decay^rankIndex
@@ -584,26 +602,24 @@ Authenticated `spotifyFetch()` with automatic token refresh. Retries 429 only wh
 
 | Script | Purpose |
 |--------|---------|
-| `npx sst dev` | Start local backend infrastructure via SST + Express |
-| `npm run dev --workspace=frontend` | Start local Vite server for frontend |
+| `npm run dev` | Local frontend + Express API |
+| `npx sst deploy --stage <name>` | Deploy Lambda, DynamoDB, SQS, cron |
 | `npm run build` | Build all workspaces |
-| `npm run generate:ghosts -w backend` | Hydrate ghost profiles from Spotify playlists |
+| `npm run generate:ghosts -w backend` | Hydrate ghost profiles from Spotify |
+| `npm run unlock -w backend` | Clear Spotify API circuit-breaker lock in Redis |
 
 ---
 
 ## Deploying to Vercel
 
-The backend API is designed to be deployed to AWS Lambda via **SST** (`npx sst deploy --stage production`).
-The frontend is a Vite SPA that can easily be hosted on Vercel.
+Backend: `npx sst deploy --stage production` (or your stage).
+Frontend: Vite SPA on Vercel; `/api/*` rewrites to the Lambda Function URL (`vercel.json`).
 
-1. **Import Project:** When you connect the repo, Vercel will detect multiple projects. Select the **`frontend`** project.
-2. **Framework Preset:** Vercel will auto-detect **Vite**.
-3. **Build Command:** Turn on the override toggle and set it to: `npm run build -w @music-mixer/shared && npm run build` (This ensures the shared package compiles before the frontend).
-4. **Environment Variables:**
-   - Add `VITE_API_URL` and set it to your production SST Lambda API URL (e.g. `https://<api-id>.lambda-url.<region>.on.aws/api`).
-5. **SPA Routing:** The `frontend/vercel.json` file is already included to ensure React Router works correctly on refresh (rewriting all requests to `/index.html`).
-
-Vercel will handle the rest, building the `frontend` workspace and serving your static assets globally!
+1. **Import Project:** select the **`frontend`** workspace / set Root Directory to `frontend` if needed.
+2. **Framework Preset:** Vite (auto-detected).
+3. **Build Command:** `npm run build -w @music-mixer/shared && npm run build` (from monorepo root) — or configure Vercel so installs/build run from the repo root with that command.
+4. **Environment Variables:** optional `VITE_API_URL` if not using rewrites; otherwise rewrites alone are enough for same-origin `/api`.
+5. **SPA Routing:** `frontend/vercel.json` rewrites app routes to `/index.html`.
 
 ---
 
@@ -615,9 +631,10 @@ Vercel will handle the rest, building the `frontend` workspace and serving your 
 | `spotify/build.ts` | Safe-Discovery playlist pipeline |
 | `spotify/taste.ts` | Taste profile builder |
 | `spotify/genreModel.ts` | Anchor genre vectors + macro penalty |
+| `spotify/inference.ts` | Lexical / known-artist genre fallback |
 | `spotify/veto.ts` | Regional genre veto |
 | `services/ghosts.ts` | Ghost persona reader |
 | `services/session.ts` | OAuth session management |
-| `lib/persist.ts` | JSON file I/O |
+| `analytics/insights.ts` | Listening estimates, outliers, dashboard narrative |
 | `analytics/similarity.ts` | Cosine similarity + labels |
 | `frontend/src/hooks/useCollision.ts` | Collision state machine |

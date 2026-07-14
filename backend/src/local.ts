@@ -21,7 +21,7 @@ const server = app.listen(env.port, '127.0.0.1', () => {
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`\nPort ${env.port} is already in use.`);
-    console.error(`Run: node scripts/kill-dev-ports.mjs\n`);
+    console.error(`Run: node backend/scripts/kill-dev-ports.mjs\n`);
     process.exit(1);
   }
   throw err;

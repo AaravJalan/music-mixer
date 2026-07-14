@@ -5,7 +5,7 @@ import type {
   TasteTimeRange,
 } from '@music-mixer/shared';
 import { measureListeningMsSince, type TopTrack } from '../spotify/tracks';
-import { estimateListeningHours } from '../analytics/listening';
+import { estimateListeningHours } from '../analytics/insights';
 import { buildUserTasteProfile } from '../spotify/taste';
 import { getListeningTrends } from './db';
 import { getSessionUser } from './session';

@@ -24,7 +24,7 @@ export default defineConfig({
   plugins: [react(), localhostRedirect()],
   resolve: {
     alias: {
-      '@music-mixer/shared': path.resolve(__dirname, '../packages/shared/src/index.ts'),
+      '@music-mixer/shared': path.resolve(__dirname, '../shared/src/index.ts'),
     },
   },
   server: {

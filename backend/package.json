@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "predev": "node ../scripts/kill-dev-ports.mjs",
+    "predev": "node ./scripts/kill-dev-ports.mjs",
     "dev": "tsx watch src/local.ts",
     "build": "tsc",
     "build:lambda": "tsc && echo 'Lambda handler: dist/lambda.handler'",

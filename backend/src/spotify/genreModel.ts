@@ -240,9 +240,9 @@ export function macroPenaltyMultiplier(genresA: GenreStat[], genresB: GenreStat[
   const macrosB = coDominantMacros(genresB);
 
   if (macrosA.length === 0 || macrosB.length === 0) {
-    console.warn(
-      '[macroPenalty] Missing genre data for macro analysis — applying distant fallback (0.65x)',
-    );
+    // console.warn(
+    //   '[macroPenalty] Missing genre data for macro analysis — applying distant fallback (0.65x)',
+    // );
     return 0.65;
   }
 
@@ -282,17 +282,18 @@ export function computeMacroAdjustedSimilarity(
   const multiplier = macroPenaltyMultiplier(genresA, genresB);
   const similarityScore = applyMacroPenalty(baseSimilarity, multiplier);
 
-  const nameA = labels?.userA ?? 'User A';
-  const nameB = labels?.userB ?? 'User B';
-
-  if (macroA && macroB) {
-    const labelA = MACRO_CATEGORY_LABELS[macroA];
-    const labelB = MACRO_CATEGORY_LABELS[macroB];
-    console.info(
-      `[macroPenalty] ${nameA}=${labelA}, ${nameB}=${labelB} → ${multiplier}x ` +
-      `(base ${(baseSimilarity * 100).toFixed(1)}% → final ${(similarityScore * 100).toFixed(1)}%)`,
-    );
-  }
+  // const nameA = labels?.userA ?? 'User A';
+  // const nameB = labels?.userB ?? 'User B';
+  //
+  // if (macroA && macroB) {
+  //   const labelA = MACRO_CATEGORY_LABELS[macroA];
+  //   const labelB = MACRO_CATEGORY_LABELS[macroB];
+  //   console.info(
+  //     `[macroPenalty] ${nameA}=${labelA}, ${nameB}=${labelB} → ${multiplier}x ` +
+  //     `(base ${(baseSimilarity * 100).toFixed(1)}% → final ${(similarityScore * 100).toFixed(1)}%)`,
+  //   );
+  // }
+  void labels;
 
   return { similarityScore, macroA, macroB, multiplier };
 }

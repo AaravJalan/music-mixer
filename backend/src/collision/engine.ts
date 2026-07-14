@@ -8,7 +8,7 @@ import type {
 } from '@music-mixer/shared';
 import { weightedCentroid } from '../analytics/vector';
 import { averagePairwiseSimilarity } from '../analytics/similarity';
-import { estimateListeningHoursFromTopTracks } from '../analytics/listening';
+import { estimateListeningHoursFromTopTracks } from '../analytics/insights';
 import { findSharedTopArtists } from '../analytics/sharedArtists';
 import type { TopTrack } from '../spotify/tracks';
 import type { ProfileArtist } from '../spotify/taste';
@@ -102,62 +102,6 @@ function toLegacyResult(
   };
 }
 
-function trackKey(t: TopTrack): string {
-  const id = (t.id ?? '').replace(/^spotify:track:/, '').trim();
-  if (id && !id.startsWith('ghost-')) return `id:${id}`;
-  return `name:${t.name.toLowerCase().trim()}|${t.artist.toLowerCase().trim()}`;
-}
-
-/** Common tracks across all participants (matched by Spotify ID, or name+artist for ghosts). */
-function commonTracks(participants: ParticipantBundle[]): TopTrack[] {
-  if (participants.length < 2) return [];
-  const [first, ...rest] = participants;
-  const restKeys = rest.map((p) => new Set(p.tracks.map(trackKey)));
-  const seen = new Set<string>();
-  const common: TopTrack[] = [];
-  for (const track of first.tracks) {
-    const key = trackKey(track);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (restKeys.every((set) => set.has(key))) common.push(track);
-  }
-  return common;
-}
-
-/** Pretty-print each participant's top artists/songs and the common ones to the terminal. */
-function logCollisionInsights(
-  participants: ParticipantBundle[],
-  sharedArtists: import('@music-mixer/shared').SharedArtist[],
-): void {
-  const TOP_N = 10;
-  console.log('\n════════════════════ COLLISION ════════════════════');
-
-  for (const p of participants) {
-    console.log(`\n👤 ${p.user.displayName}${p.isGhost ? ' (ghost)' : ''}`);
-
-    const artists = p.artists.slice(0, TOP_N).map((a, i) => `   ${i + 1}. ${a.name}`);
-    console.log(`  Top artists:${artists.length ? '\n' + artists.join('\n') : ' (none)'}`);
-
-    const songs = p.tracks.slice(0, TOP_N).map((t, i) => `   ${i + 1}. ${t.name} — ${t.artist}`);
-    console.log(`  Top songs:${songs.length ? '\n' + songs.join('\n') : ' (none)'}`);
-  }
-
-  console.log('\n🤝 In common:');
-  if (sharedArtists.length > 0) {
-    console.log(`  Artists: ${sharedArtists.map((a) => a.name).join(', ')}`);
-  } else {
-    console.log('  Artists: (none)');
-  }
-
-  const songs = commonTracks(participants);
-  if (songs.length > 0) {
-    console.log(`  Songs: ${songs.map((t) => `${t.name} — ${t.artist}`).join(', ')}`);
-  } else {
-    console.log('  Songs: (none)');
-  }
-  console.log('════════════════════════════════════════════════════\n');
-}
-
 export async function runMultiUserCollision(input: MultiCollisionInput): Promise<CollisionResult> {
   const { sessionId, participants, config, collisionId = '' } = input;
 
@@ -214,7 +158,6 @@ export async function runMultiUserCollision(input: MultiCollisionInput): Promise
     15,
   );
 
-  logCollisionInsights(participants, sharedArtists);
 
   const playlistTargets = resolvePlaylistBuildTargets(config);
   const playlistResult = await buildMultiCollisionPlaylist({
