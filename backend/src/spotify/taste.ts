@@ -2,8 +2,16 @@ import type { AudioFeatureVector, GenreStat, TasteTimeRange } from '@music-mixer
 import { SPOTIFY_TOP_TRACKS_LIMIT } from '@music-mixer/shared';
 import { aggregateWeightedGenres } from '../analytics/genres';
 import { computeWeightedTasteVector, type WeightedGenre } from './genreModel';
-import { getCachedArtistGenres, setCachedArtistGenres } from '../lib/cache';
+import {
+  getCachedArtistGenres,
+  setCachedArtistGenres,
+  getCachedLastfmTrackGenres,
+  setCachedLastfmTrackGenres,
+  getCachedLastfmArtistGenres,
+  setCachedLastfmArtistGenres,
+} from '../lib/cache';
 import { inferGenresFromArtistName, inferGenresFromText } from './inference';
+import { fetchTrackTags, fetchArtistTags } from './lastfm';
 import { spotifyFetch } from './client';
 import { fetchTopTracks, resolveSpotifyTimeRange, type TopTrack } from './tracks';
 
@@ -22,59 +30,57 @@ interface SpotifyTopArtistsResponse {
   items: SpotifyArtist[];
 }
 
-interface SpotifyArtistsBatchResponse {
-  artists: (SpotifyArtist | null)[];
-}
 
-/** Batch-hydrate artist details (images + genres) from `/artists?ids=`. */
-async function fetchArtistsBatch(
-  sessionId: string,
-  ids: string[],
-): Promise<Map<string, SpotifyArtist>> {
-  const map = new Map<string, SpotifyArtist>();
-  const validIds = [...new Set(ids.filter((id) => id && id.length > 0))];
+/**
+ * Waterfall metadata resolver for a single artist (+ optional track).
+ *
+ * Priority:
+ *   a) Redis: genres:track:<artist>:<track>
+ *   b) Redis: genres:artist:<artist>
+ *   c) Last.fm track.getTopTags  → cache 14d
+ *   d) Last.fm artist.getTopTags → cache 30d
+ *   e) Lexical inference (regex + known-artist map)
+ *   f) ['Pop'] baseline
+ */
+async function resolveMetadata(artistName: string, trackName?: string): Promise<string[]> {
+  const artist = artistName.toLowerCase().trim();
 
-  for (let i = 0; i < validIds.length; i += 50) {
-    const batch = validIds.slice(i, i + 50);
-    try {
-      const data = await spotifyFetch<SpotifyArtistsBatchResponse>(sessionId, '/artists', {
-        ids: batch.join(','),
-      });
-      for (const artist of data.artists ?? []) {
-        if (artist?.id) map.set(artist.id, artist);
-      }
-    } catch (e) {
-      console.warn(`Batch of ${batch.length} failed, retrying in chunks of 5...`);
-      for (let j = 0; j < batch.length; j += 5) {
-        const subBatch = batch.slice(j, j + 5);
-        try {
-          const data2 = await spotifyFetch<SpotifyArtistsBatchResponse>(sessionId, '/artists', {
-            ids: subBatch.join(','),
-          });
-          for (const artist of data2.artists ?? []) {
-            if (artist?.id) map.set(artist.id, artist);
-          }
-        } catch (e2) {
-          console.warn(`Sub-batch of ${subBatch.length} failed, retrying individually...`);
-          for (const id of subBatch) {
-            try {
-              const data3 = await spotifyFetch<SpotifyArtistsBatchResponse>(sessionId, '/artists', {
-                ids: id,
-              });
-              for (const artist of data3.artists ?? []) {
-                if (artist?.id) map.set(artist.id, artist);
-              }
-            } catch (e3) {
-              console.error(`Failed to fetch artist ${id}`);
-            }
-          }
-        }
-      }
+  // a) Track-level Redis hit
+  if (trackName) {
+    const cached = await getCachedLastfmTrackGenres(artist, trackName);
+    if (cached && cached.length > 0) return cached;
+  }
+
+  // b) Artist-level Redis hit
+  const cachedArtist = await getCachedLastfmArtistGenres(artist);
+  if (cachedArtist && cachedArtist.length > 0) return cachedArtist;
+
+  // c) Last.fm track tags
+  if (trackName) {
+    const trackGenres = await fetchTrackTags(artist, trackName);
+    if (trackGenres.length > 0) {
+      await setCachedLastfmTrackGenres(artist, trackName, trackGenres);
+      return trackGenres;
     }
   }
 
-  return map;
+  // d) Last.fm artist tags
+  const artistGenres = await fetchArtistTags(artist);
+  if (artistGenres.length > 0) {
+    await setCachedLastfmArtistGenres(artist, artistGenres);
+    return artistGenres;
+  }
+
+  // e) Lexical inference
+  const inferred = trackName
+    ? inferGenresFromText(artistName, trackName)
+    : inferGenresFromArtistName(artistName);
+  if (inferred.length > 0) return inferred;
+
+  // f) Baseline
+  return ['Pop'];
 }
+
 
 export interface ProfileArtist {
   id: string;
@@ -104,65 +110,47 @@ function rankWeight(rankIndex: number, total: number): number {
   return Math.max(1, total - rankIndex);
 }
 
-/** Rate-limited artist detail fetch — only top N artists. */
+/**
+ * Enrich artist genre map.
+ *
+ * Resolution order per artist:
+ *   1. Genres already attached to the Spotify artist object (from /me/top/artists)
+ *   2. Redis artist_genres cache (legacy Spotify batch cache)
+ *   3. resolveMetadata waterfall (Last.fm → inference → baseline)
+ */
 async function enrichArtistGenres(
-  sessionId: string,
+  _sessionId: string,
   artists: SpotifyArtist[],
 ): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
 
+  // 1. Use any genres Spotify already returned on the top-artists endpoint
   for (const artist of artists) {
     const fromList = safeGenres(artist.genres);
-    const inferred = inferGenresFromArtistName(artist.name);
     if (fromList.length > 0) {
       map.set(artist.id, fromList);
-    } else if (inferred.length > 0) {
-      map.set(artist.id, inferred);
     }
   }
 
-  const needsFetch = artists.filter((a) => !map.has(a.id) || map.get(a.id)!.length === 0);
+  // 2. Check legacy artist_genres Redis cache for artists still missing
+  const stillMissing = artists.filter((a) => !map.has(a.id));
+  await Promise.all(
+    stillMissing.map(async (artist) => {
+      const cached = await getCachedArtistGenres(artist.id);
+      if (cached && cached.length > 0) map.set(artist.id, cached);
+    }),
+  );
 
-  if (needsFetch.length > 0) {
-    // Check Redis cache first for all missing artists
-    const cachedResults = await Promise.all(
-      needsFetch.map(async (artist) => ({
-        artist,
-        genres: await getCachedArtistGenres(artist.id)
-      }))
-    );
-
-    const stillNeedsFetch: SpotifyArtist[] = [];
-    for (const { artist, genres } of cachedResults) {
-      if (genres && genres.length > 0) {
-        map.set(artist.id, genres);
-      } else {
-        stillNeedsFetch.push(artist);
-      }
-    }
-
-    if (stillNeedsFetch.length > 0) {
-      // Fetch remaining from Spotify in batches of 50
-      const fetchedMap = await fetchArtistsBatch(sessionId, stillNeedsFetch.map((a) => a.id));
-      
-      // Save to map and Redis cache
-      for (const artist of stillNeedsFetch) {
-        const detail = fetchedMap.get(artist.id);
-        const apiGenres = safeGenres(detail?.genres);
-        if (apiGenres.length > 0) {
-          map.set(artist.id, apiGenres);
-          await setCachedArtistGenres(artist.id, artist.name, apiGenres);
-        }
-      }
-    }
-  }
-
-  // Fallback to inference for any that still have no genres
-  for (const artist of artists) {
-    if (!map.has(artist.id) || map.get(artist.id)!.length === 0) {
-      map.set(artist.id, inferGenresFromArtistName(artist.name));
-    }
-  }
+  // 3. Waterfall resolution for anything still unresolved
+  const needsWaterfall = artists.filter((a) => !map.has(a.id));
+  await Promise.all(
+    needsWaterfall.map(async (artist) => {
+      const genres = await resolveMetadata(artist.name);
+      map.set(artist.id, genres);
+      // Backfill legacy cache so subsequent builds skip the waterfall
+      await setCachedArtistGenres(artist.id, artist.name, genres);
+    }),
+  );
 
   return map;
 }
@@ -186,38 +174,36 @@ function collectWeightedGenres(
   return weighted;
 }
 
-function supplementFromTracks(
+async function supplementFromTracks(
   tracks: TopTrack[],
   artistGenreMap: Map<string, string[]>,
   weighted: WeightedGenre[],
   topArtistIds: Set<string>,
-): WeightedGenre[] {
+): Promise<WeightedGenre[]> {
   const result = [...weighted];
 
-  for (let i = 0; i < tracks.length; i++) {
-    const track = tracks[i];
-    const w = rankWeight(i, tracks.length) * 0.2; // Gentle modifier
-    const trackGenres = inferGenresFromText(track.name, track.artist);
+  await Promise.all(
+    tracks.map(async (track, i) => {
+      const w = rankWeight(i, tracks.length) * 0.2;
 
-    for (const genre of trackGenres) {
-      result.push({ genre, weight: w });
-    }
+      // Use waterfall for track-level genre signal
+      const trackGenres = await resolveMetadata(track.artist, track.name);
+      for (const genre of trackGenres) result.push({ genre, weight: w });
 
-    for (const artistId of track.artistIds) {
-      if (!artistGenreMap.has(artistId) || artistGenreMap.get(artistId)!.length === 0) {
-        const inferred = inferGenresFromText(track.artist, track.name);
-        if (inferred.length > 0) artistGenreMap.set(artistId, inferred);
-      }
-      
-      // Only supplement artist genres if they aren't already massively counted in top 100 artists
-      if (!topArtistIds.has(artistId)) {
-        const genres = artistGenreMap.get(artistId) ?? inferGenresFromText(track.artist);
-        for (const genre of genres) {
-          result.push({ genre, weight: w });
+      for (const artistId of track.artistIds) {
+        if (!artistGenreMap.has(artistId) || artistGenreMap.get(artistId)!.length === 0) {
+          const resolved = await resolveMetadata(track.artist, track.name);
+          if (resolved.length > 0) artistGenreMap.set(artistId, resolved);
+        }
+
+        // Only supplement artist genres for artists not already in top-100
+        if (!topArtistIds.has(artistId)) {
+          const genres = artistGenreMap.get(artistId) ?? await resolveMetadata(track.artist);
+          for (const genre of genres) result.push({ genre, weight: w });
         }
       }
-    }
-  }
+    }),
+  );
 
   return result;
 }
@@ -281,19 +267,9 @@ async function doBuildUserTasteProfile(
   let artists: SpotifyArtist[];
 
   if (timeRange === 'year_to_date') {
-    // YTD artists are derived from the ranked track list, so tracks must resolve first.
+    // YTD: derive artists directly from tracks (album art already set as fallbackImage)
     tracks = await fetchTopTracks(sessionId, timeRange);
-    const derived = artistsFromTracks(tracks);
-    const details = await fetchArtistsBatch(sessionId, derived.map((a) => a.id));
-    artists = derived.map((a) => {
-      const detail = details.get(a.id);
-      if (!detail) return a;
-      return {
-        ...a,
-        images: detail.images ?? a.images,
-        genres: safeGenres(detail.genres).length > 0 ? detail.genres : a.genres,
-      };
-    });
+    artists = artistsFromTracks(tracks);
   } else {
     // Concurrency fix: fetch this user's Top Tracks and Top Artists at the same time
     // (they are independent) to cut collision latency roughly in half.
@@ -327,18 +303,9 @@ async function doBuildUserTasteProfile(
       const needed = 100 - artists.length;
       const toFetch = missing.slice(0, needed);
       
+      // Pad with track-derived artists (album art already set as fallbackImage)
       if (toFetch.length > 0) {
-        const details = await fetchArtistsBatch(sessionId, toFetch.map((a) => a.id));
-        const padded = toFetch.map((a) => {
-          const detail = details.get(a.id);
-          if (!detail) return a;
-          return {
-            ...a,
-            images: detail.images ?? a.images,
-            genres: safeGenres(detail.genres).length > 0 ? detail.genres : a.genres,
-          };
-        });
-        artists.push(...padded);
+        artists.push(...toFetch);
       }
     }
   }
@@ -347,7 +314,7 @@ async function doBuildUserTasteProfile(
 
   let weightedGenres = collectWeightedGenres(artists, artistGenreMap);
   const topArtistIds = new Set(artists.map((a) => a.id));
-  weightedGenres = supplementFromTracks(tracks, artistGenreMap, weightedGenres, topArtistIds);
+  weightedGenres = await supplementFromTracks(tracks, artistGenreMap, weightedGenres, topArtistIds);
 
   const vector = computeWeightedTasteVector(weightedGenres);
   const genres = aggregateWeightedGenres(weightedGenres, genreDisplayLimit);

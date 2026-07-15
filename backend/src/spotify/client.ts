@@ -92,3 +92,38 @@ export async function spotifyFetch<T>(
 
   throw lastError instanceof Error ? lastError : new SpotifyApiError('Rate limited', 429);
 }
+/**
+ * Fetch a batch of artists from Spotify (up to 50 at a time).
+ * Used during playlist generation to quickly fetch genres for unknown artists.
+ */
+export async function fetchArtistsBatch(
+  sessionId: string,
+  artistIds: string[]
+): Promise<{ id: string; name: string; genres: string[] }[]> {
+  if (artistIds.length === 0) return [];
+  
+  const uniqueIds = [...new Set(artistIds)].filter(id => Boolean(id));
+  if (uniqueIds.length === 0) return [];
+
+  const results: { id: string; name: string; genres: string[] }[] = [];
+  
+  for (let i = 0; i < uniqueIds.length; i += 50) {
+    const chunk = uniqueIds.slice(i, i + 50);
+    try {
+      const data = await spotifyFetch(sessionId, `/artists?ids=${chunk.join(',')}`) as any;
+      if (data.artists) {
+        for (const artist of data.artists) {
+          if (artist) results.push({
+            id: artist.id,
+            name: artist.name,
+            genres: artist.genres ?? []
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[fetchArtistsBatch] Failed to fetch artists chunk`, err);
+    }
+  }
+  
+  return results;
+}

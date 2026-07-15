@@ -6,16 +6,26 @@ import { redis } from '../services/redis/client';
 const ARTIST_GENRES_TTL = 30 * 24 * 60 * 60; // 30 days
 const DASHBOARD_TTL = 24 * 60 * 60;           // 24 hours
 const TASTE_PROFILE_TTL = 3 * 60 * 60;        // 3 hours
+const LASTFM_TRACK_TTL  = 14 * 24 * 60 * 60; // 14 days
+const LASTFM_ARTIST_TTL = 30 * 24 * 60 * 60; // 30 days
 
 const DASHBOARD_CACHE_VERSION = 'v20';
 const TASTE_PROFILE_CACHE_VERSION = 'v6';
 
 // ─── Key helpers ──────────────────────────────────────────────────────────────
-const artistGenresKey = (artistId: string) => `artist_genres:${artistId}`;
-const dashboardKey = (userId: string, term: TasteTimeRange) =>
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+const artistGenresKey  = (artistId: string) => `artist_genres:${artistId}`;
+const dashboardKey     = (userId: string, term: TasteTimeRange) =>
   `dashboard:${userId}:${term}:${DASHBOARD_CACHE_VERSION}`;
-const tasteProfileKey = (userId: string, term: TasteTimeRange) =>
+const tasteProfileKey  = (userId: string, term: TasteTimeRange) =>
   `taste_profile:${userId}:${term}:${TASTE_PROFILE_CACHE_VERSION}`;
+const lastfmTrackKey   = (artist: string, track: string) =>
+  `genres:track:${slugify(artist)}:${slugify(track)}`;
+const lastfmArtistKey  = (artist: string) =>
+  `genres:artist:${slugify(artist)}`;
 
 // ─── Artist Genres Cache ──────────────────────────────────────────────────────
 
@@ -97,4 +107,26 @@ export async function setCachedTasteProfile(
     artistGenreMap: Array.from(profile.artistGenreMap.entries())
   };
   await redis.set(tasteProfileKey(userId, term), JSON.stringify(toCache), { ex: TASTE_PROFILE_TTL });
+}
+
+// ─── Last.fm Genre Cache ──────────────────────────────────────────────────────
+
+export async function getCachedLastfmTrackGenres(artist: string, track: string): Promise<string[] | null> {
+  const raw = await redis.get<string>(lastfmTrackKey(artist, track));
+  if (!raw) return null;
+  try { return JSON.parse(raw) as string[]; } catch { return null; }
+}
+
+export async function setCachedLastfmTrackGenres(artist: string, track: string, genres: string[]): Promise<void> {
+  await redis.set(lastfmTrackKey(artist, track), JSON.stringify(genres), { ex: LASTFM_TRACK_TTL });
+}
+
+export async function getCachedLastfmArtistGenres(artist: string): Promise<string[] | null> {
+  const raw = await redis.get<string>(lastfmArtistKey(artist));
+  if (!raw) return null;
+  try { return JSON.parse(raw) as string[]; } catch { return null; }
+}
+
+export async function setCachedLastfmArtistGenres(artist: string, genres: string[]): Promise<void> {
+  await redis.set(lastfmArtistKey(artist), JSON.stringify(genres), { ex: LASTFM_ARTIST_TTL });
 }

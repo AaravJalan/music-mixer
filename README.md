@@ -37,6 +37,7 @@ Copy `backend/.env.example` to a root `.env` (or `backend/.env` — both are loa
 | `SPOTIFY_CLIENT_ID` | Yes | — |
 | `SPOTIFY_CLIENT_SECRET` | Yes | — |
 | `SPOTIFY_REDIRECT_URI` | Yes | — |
+| `LASTFM_API_KEY` | Yes | — |
 | `PORT` | No | `3001` |
 | `FRONTEND_URL` | No | `http://127.0.0.1:5173` |
 | `UPSTASH_REDIS_REST_URL` | Yes | — |
@@ -93,7 +94,7 @@ Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @m
 ### Dashboard & analytics
 
 - Personal taste radar (6D feature vector)
-- **Rule-based Lexical Genre Inference Engine** — keyword / known-artist heuristics when Spotify returns empty genres
+- **Rule-based Lexical Genre Inference Engine** — keyword heuristics and dynamic Last.fm tag resolution when Spotify returns empty genres
 - Top genres, artists, and tracks
 - Narrative listening insights and sonic outlier detection
 - Estimated listening hours and play counts
@@ -129,9 +130,9 @@ Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @m
 │  Types · Constants   │      │  Sessions · History · Caches · Habits    │
 └──────────────────────┘      └────────────────────────────────────────────┘
                                           │
-                              ┌───────────▼──────────┐
-                              │  Spotify Web API v1  │
-                              └──────────────────────┘
+                              ┌───────────▼──────────────────────┐
+                              │  Spotify Web API & Last.fm API   │
+                              └──────────────────────────────────┘
 ```
 
 ### Design principles

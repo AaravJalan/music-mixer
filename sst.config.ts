@@ -34,6 +34,7 @@ export default $config({
         SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || "",
         SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || "",
         LISTENING_HABITS_TABLE: listeningHabitsTable.name,
+        LASTFM_API_KEY: process.env.LASTFM_API_KEY || "",
       },
     });
 
@@ -59,6 +60,7 @@ export default $config({
           SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || "",
           SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || "",
           LISTENING_HABITS_TABLE: listeningHabitsTable.name,
+          LASTFM_API_KEY: process.env.LASTFM_API_KEY || "",
         }
       }
     });

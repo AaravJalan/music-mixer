@@ -72,7 +72,7 @@ export function Home({ user }: HomeProps) {
     setCreating(true);
     try {
       const { collision } = await api.createCollision({ mode: 'link' });
-      setLinkCollision({ id: collision.id, shareUrl: collision.shareUrl });
+      setLinkCollision({ id: collision.id, shareUrl: `${window.location.origin}/join/${collision.id}` });
     } finally {
       setCreating(false);
     }

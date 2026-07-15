@@ -40,6 +40,7 @@ export const env = {
     url: () => required('UPSTASH_REDIS_REST_URL'),
     token: () => required('UPSTASH_REDIS_REST_TOKEN'),
   },
+  lastfmApiKey: optional('LASTFM_API_KEY', ''),
   isProd: optional('NODE_ENV', 'development') === 'production',
 };
 

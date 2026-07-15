@@ -158,14 +158,17 @@ export function ghostGenresToStats(genres: string[]): GenreStat[] {
   if (genres.length === 0) return [];
   
   // Convert ghost micro-genres to the new macro-genres
-  const mappedGenres = [...new Set(genres.map(mapToParentGenre))];
+  const mappedGenres = [...new Set(genres.map(g => mapToParentGenre(g)))];
   
   const base = Math.floor(100 / mappedGenres.length);
   const remainder = 100 % mappedGenres.length;
   
-  return mappedGenres.map((genre, i) => ({
-    genre,
-    percentage: i === 0 ? base + remainder : base,
-    count: 10 - i, // fake count for sorting
-  }));
+  return mappedGenres.map((genre, i) => {
+    const percentage = i === 0 ? base + remainder : base;
+    return {
+      genre,
+      percentage,
+      count: percentage, // Use percentage as the count so UI bars are proportional
+    };
+  });
 }

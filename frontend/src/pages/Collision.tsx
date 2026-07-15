@@ -63,7 +63,7 @@ export function CollisionPage({ user }: CollisionPageProps) {
   if (isUserA && collision.status === 'waiting' && !soloMode) {
     return (
       <div className="space-y-6 max-w-lg mx-auto">
-        <ShareLink shareUrl={collision.shareUrl} user={user} />
+        <ShareLink shareUrl={`${window.location.origin}/join/${collision.id}`} user={user} />
         <CollisionSettings
           userAName={user.displayName}
           userBName="Your Friend"

@@ -20,83 +20,13 @@ const TEXT_RULES: Array<{ pattern: RegExp; genres: string[] }> = [
   { pattern: /\bfunk\b|\bdisco\b/, genres: ['funk', 'dance'] },
 ];
 
-/** Well-known artists → genres when API omits them. */
-const KNOWN_ARTIST_GENRES: Record<string, string[]> = {
-  'taylor swift': ['pop', 'country'],
-  'coldplay': ['alternative rock', 'pop rock', 'pop', 'synth-pop', 'ambient'],
-  'ed sheeran': ['pop', 'folk'],
-  'the weeknd': ['pop', 'r&b'],
-  'drake': ['hip hop', 'rap'],
-  'ariana grande': ['pop', 'r&b'],
-  'billie eilish': ['pop', 'indie'],
-  'eminem': ['rap', 'hip hop'],
-  'beyoncé': ['pop', 'r&b'],
-  'beyonce': ['pop', 'r&b'],
-  'kendrick lamar': ['hip hop', 'rap'],
-  'post malone': ['hip hop', 'pop'],
-  'dua lipa': ['pop', 'dance'],
-  'harry styles': ['pop', 'rock'],
-  'olivia rodrigo': ['pop', 'indie pop'],
-  'the beatles': ['rock', 'pop'],
-  'queen': ['rock', 'classic rock'],
-  'radiohead': ['alternative', 'rock'],
-  'arctic monkeys': ['indie', 'rock'],
-  'pritam': ['bollywood'],
-  'a.r. rahman': ['bollywood'],
-  'ar rahman': ['bollywood'],
-  'arijit singh': ['bollywood'],
-  'badshah': ['bollywood', 'hip hop'],
-  'neha kakkar': ['bollywood', 'pop'],
-  'shreya ghoshal': ['bollywood'],
-  'kk': ['bollywood'],
-  'sonu nigam': ['bollywood'],
-  'atif aslam': ['bollywood', 'pop'],
-  'marshmello': ['edm', 'electronic'],
-  'calvin harris': ['edm', 'electronic'],
-  'david guetta': ['edm', 'electronic'],
-  'skrillex': ['edm', 'electronic'],
-  'metallica': ['metal', 'rock'],
-  'linkin park': ['rock', 'alternative'],
-  'imagine dragons': ['rock', 'pop'],
-  'vishal-shekhar': ['bollywood'],
-  'shankar-ehsaan-loy': ['bollywood'],
-  'farhan akhtar': ['bollywood'],
-  'metro boomin': ['rap', 'hip hop'],
-  'avicii': ['edm', 'electronic'],
-  'shashwat sachdev': ['bollywood', 'alternative'],
-  'the local train': ['indie', 'rock'],
-  'shankar mahadevan': ['bollywood'],
-  'twenty one pilots': ['alternative', 'indie'],
-  'kanye west': ['hip hop', 'rap'],
-  'travis scott': ['hip hop', 'rap'],
-  'playboi carti': ['hip hop', 'rap'],
-  'bad bunny': ['latin', 'reggaeton'],
-  'shakira': ['latin', 'pop'],
-  'rihanna': ['pop', 'r&b'],
-  'lady gaga': ['pop', 'dance'],
-  'bruno mars': ['pop', 'funk'],
-  'sza': ['r&b', 'soul'],
-  'frank ocean': ['r&b', 'soul'],
-  'tyler, the creator': ['hip hop', 'alternative'],
-  'tyler the creator': ['hip hop', 'alternative'],
-};
-
 export function inferGenresFromText(...texts: (string | undefined)[]): string[] {
   const found = new Set<string>();
   const combined = texts.filter(Boolean).join(' ').toLowerCase();
 
   if (!combined.trim()) return [];
 
-  const normalizedArtist = combined.trim();
-  if (KNOWN_ARTIST_GENRES[normalizedArtist]) {
-    for (const g of KNOWN_ARTIST_GENRES[normalizedArtist]) found.add(g);
-  }
 
-  for (const [name, genres] of Object.entries(KNOWN_ARTIST_GENRES)) {
-    if (combined.includes(name)) {
-      for (const g of genres) found.add(g);
-    }
-  }
 
   for (const rule of TEXT_RULES) {
     if (rule.pattern.test(combined)) {

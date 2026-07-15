@@ -12,6 +12,8 @@ import { applyLinguisticVetoToPools } from './veto';
 import { normalizeArtistName } from '../analytics/sharedArtists';
 import { spotifyFetch, SpotifyApiError } from './client';
 import type { TopTrack } from './tracks';
+import { mapToParentGenre } from './genreMapper';
+import { fetchArtistTags } from './lastfm';
 
 /**
  * Deterministic Data Sanitization: implemented a deterministic deduplication pipeline
@@ -76,29 +78,17 @@ const MAX_GENERATION_TRACKS = 50;
 /** Minimum genre affinity (0–1) for high-affinity intersection. */
 export const MIN_AFFINITY_THRESHOLD = 0.20;
 
-/** Regional/linguistic genres — strict intersection policy (>20% both users). */
-export const REGIONAL_GENRES = [
-  'bollywood',
-  'desi',
-  'filmi',
-  'punjabi',
-  'indian',
-  'tamil',
-  'telugu',
-  'sufi',
-  'ghazal',
-  'k-pop',
-  'k-r&b',
-  'k-hip hop',
-  'mandopop',
-  'cantopop',
-  'c-pop',
-  'latin',
-  'reggaeton',
-  'salsa',
-  'urbano',
-  'french pop',
-] as const;
+/** Macro genres that require strict cultural intersection. */
+export const CULTURAL_MACRO_GENRES = new Set([
+  'Bollywood',
+  'Tamil / Telugu',
+  'Tamil / Telugu',
+  'Sufi / Ghazal',
+  'K-Pop',
+  'Anime',
+  'Latin',
+  'World',
+]);
 
 const GLOBAL_SUPERSTAR_ARTISTS = new Set([
   'coldplay',
@@ -178,9 +168,9 @@ function sharedGenresForMidpointQuery(
 
   // If only regional overlap exists, allow only shared-safe regional tokens.
   return shared.filter((g) => {
-    const tokens = regionalTokens(g);
-    if (tokens.length === 0) return false;
-    return tokens.every((t) => sharedRegionalTokens.has(t));
+    const parent = mapToParentGenre(g) || g;
+    if (!CULTURAL_MACRO_GENRES.has(parent)) return false;
+    return sharedRegionalTokens.has(parent);
   });
 }
 
@@ -206,9 +196,8 @@ function isSharedSafeRegionalGenre(
   sharedRegionalTokens: Set<string>,
 ): boolean {
   if (!isRegionalGenre(genre)) return true;
-  const tokens = regionalTokens(genre);
-  if (tokens.length === 0) return false;
-  return tokens.every((t) => sharedRegionalTokens.has(t));
+  const parent = mapToParentGenre(genre) || genre;
+  return sharedRegionalTokens.has(parent);
 }
 
 function buildMultiGenreQuery(genres: string[]): string {
@@ -233,8 +222,8 @@ function uniqueOrdered<T>(arr: T[]): T[] {
 }
 
 function isRegionalGenre(genre: string): boolean {
-  const key = genre.toLowerCase().trim();
-  return REGIONAL_GENRES.some((regional) => key.includes(regional) || regional.includes(key));
+  const parent = mapToParentGenre(genre) || genre;
+  return CULTURAL_MACRO_GENRES.has(parent);
 }
 
 function isFullyRegionalPool(pool: GenreStat[]): boolean {
@@ -247,12 +236,6 @@ function isFullyGlobalPool(pool: GenreStat[]): boolean {
   return pool.every((g) => !isRegionalGenre(g.genre));
 }
 
-/** The regional-language tokens (e.g. 'bollywood', 'punjabi') a genre string maps to. */
-function regionalTokens(genre: string): string[] {
-  const key = genre.toLowerCase().trim();
-  return REGIONAL_GENRES.filter((r) => key.includes(r) || r.includes(key));
-}
-
 /**
  * Per-song Cultural Guardrail.
  *
@@ -263,6 +246,10 @@ function regionalTokens(genre: string): string[] {
  */
 interface CulturalGuardrail {
   isBanned(track: RecommendationTrack): boolean;
+  registerFallbackGenres(artistId: string, genres: string[]): void;
+  registerFallbackNameGenres(artistName: string, genres: string[]): void;
+  hasArtistGenre(artistId: string): boolean;
+  hasArtistNameGenre(artistName: string): boolean;
 }
 
 function buildCulturalGuardrail(
@@ -281,17 +268,20 @@ function buildCulturalGuardrail(
     }
   }
 
-  // Regional tokens each participant actually listens to.
+  // Regional macro-genres each participant actually listens to.
   const perParticipantTokens = genreStatPools.map((pool) => {
     const tokens = new Set<string>();
     for (const stat of pool ?? []) {
       if (!stat?.genre) continue;
-      for (const token of regionalTokens(stat.genre)) tokens.add(token);
+      // stat.genre is already a macro genre because it comes from aggregateWeightedGenres
+      if (CULTURAL_MACRO_GENRES.has(stat.genre)) {
+        tokens.add(stat.genre);
+      }
     }
     return tokens;
   });
 
-  // A regional token is "shared-safe" only if EVERY participant has it.
+  // A regional macro genre is "shared-safe" only if EVERY participant has it.
   const sharedRegionalTokens = new Set<string>();
   if (perParticipantTokens.length > 0) {
     for (const token of perParticipantTokens[0]) {
@@ -307,7 +297,8 @@ function buildCulturalGuardrail(
       if (g) return g;
     }
     for (const name of track.artist.split(',')) {
-      const g = genresByName.get(normalizeArtistName(name));
+      const normalized = normalizeArtistName(name);
+      const g = genresByName.get(normalized);
       if (g) return g;
     }
     return [];
@@ -317,7 +308,10 @@ function buildCulturalGuardrail(
     const genres = trackGenres(track);
     const tokens = new Set<string>();
     for (const genre of genres) {
-      for (const token of regionalTokens(genre)) tokens.add(token);
+      const parent = mapToParentGenre(genre);
+      if (parent && CULTURAL_MACRO_GENRES.has(parent)) {
+        tokens.add(parent);
+      }
     }
     return tokens;
   };
@@ -328,16 +322,32 @@ function buildCulturalGuardrail(
     isBanned(track: RecommendationTrack): boolean {
       const genres = trackGenres(track);
       if (genres.length === 0) return false; // unknown genre → best-effort allow
-      const tokens = new Set<string>();
-      for (const genre of genres) {
-        for (const token of regionalTokens(genre)) tokens.add(token);
-      }
+      
+      const tokens = trackRegionalTokens(track);
       if (tokens.size === 0) return false; // not a regional track
+      
       // Ban if any regional token isn't shared by every participant.
       for (const token of tokens) {
         if (!sharedRegionalTokens.has(token)) return true;
       }
       return false;
+    },
+    registerFallbackGenres(artistId: string, genres: string[]): void {
+      if (!genresById.has(artistId)) {
+        genresById.set(artistId, genres);
+      }
+    },
+    registerFallbackNameGenres(artistName: string, genres: string[]): void {
+      const normalized = normalizeArtistName(artistName);
+      if (!genresByName.has(normalized)) {
+        genresByName.set(normalized, genres);
+      }
+    },
+    hasArtistGenre(artistId: string): boolean {
+      return genresById.has(artistId);
+    },
+    hasArtistNameGenre(artistName: string): boolean {
+      return genresByName.has(normalizeArtistName(artistName));
     },
     // @ts-expect-error internal helper attached dynamically (kept out of interface to avoid rippling types)
     trackRegionalTokens,
@@ -1131,6 +1141,38 @@ export async function buildMultiCollisionPlaylist(
   const sessionSeed = discoverySessionSeed(input.randomOffset);
   const targetLength = input.targetLength;
 
+  const resolveMissingArtistGenres = async (tracks: RecommendationTrack[]) => {
+    const missingArtistNames = new Set<string>();
+    for (const t of tracks) {
+      const names = t.artist.split(',').map(n => n.trim()).filter(Boolean);
+      for (const name of names) {
+        if (!state.culturalGuardrail?.hasArtistNameGenre(name)) {
+          missingArtistNames.add(name);
+        }
+      }
+    }
+    const fetchNames = [...missingArtistNames];
+    
+    // Fetch from Last.fm concurrently in chunks of 10 to avoid overwhelming the network
+    for (let i = 0; i < fetchNames.length; i += 10) {
+      const chunk = fetchNames.slice(i, i + 10);
+      await Promise.all(
+        chunk.map(async (name) => {
+          try {
+            const genres = await fetchArtistTags(name);
+            state.culturalGuardrail?.registerFallbackNameGenres(name, genres);
+          } catch (err) {
+            console.warn(`Failed to fetch Last.fm tags for ${name}`, err);
+          }
+        })
+      );
+    }
+  };
+
+  // Pre-warm the genre cache for all top tracks to prevent veto bypasses
+  const allTopTracks = input.trackPools.flatMap(pool => pool ?? []).map(topTrackToRecommendation);
+  await resolveMissingArtistGenres(allTopTracks);
+
   const tryAddTrackToBucket = (track: RecommendationTrack, bucket: RecommendationTrack[]): boolean => {
     if (searched.length + results.length >= targetLength) return false;
     if (shouldDiscardSuperstarCollab(track, trustedArtists)) return false;
@@ -1153,6 +1195,8 @@ export async function buildMultiCollisionPlaylist(
       return rec;
     })
   );
+  
+  await resolveMissingArtistGenres(exactOverlap);
   
   const commonIds = new Set(exactOverlap.map(t => normalizeSpotifyId(t.id)));
 
@@ -1205,7 +1249,7 @@ export async function buildMultiCollisionPlaylist(
       const s = new Set<string>();
       for (const stat of pool ?? []) {
         if (!stat?.genre) continue;
-        for (const t of regionalTokens(stat.genre)) s.add(t);
+        if (CULTURAL_MACRO_GENRES.has(stat.genre)) s.add(stat.genre);
       }
       return s;
     });
@@ -1259,7 +1303,9 @@ export async function buildMultiCollisionPlaylist(
               Math.min(50, (targetLength - (results.length + searched.length)) * 8),
               perQueryDiscoveryOffset(sessionSeed, 777 + searchCalls * 9),
             );
-            for (const t of refineDiscoveredTracks(found, trustedArtists)) {
+            const refined = refineDiscoveredTracks(found, trustedArtists);
+            await resolveMissingArtistGenres(refined);
+            for (const t of refined) {
               if (searched.length + results.length >= targetLength) break;
               tryAddTrackToBucket(t, searched);
             }
@@ -1276,6 +1322,11 @@ export async function buildMultiCollisionPlaylist(
       const pools = input.trackPools.map((pool) =>
         rotate(pool ?? [], sessionSeed).map(topTrackToRecommendation),
       );
+      
+      for (const pool of pools) {
+        await resolveMissingArtistGenres(pool);
+      }
+      
       const interleaved = chunkInterleave(pools, weights, remaining, state, commonIds);
       // chunkInterleave already enforces uniqueness + registers into state.
       // Just append until we reach targetLength.
@@ -1301,7 +1352,7 @@ export async function buildMultiCollisionPlaylist(
       const nonDefault = fallbackGenres.filter((g) => g && g.toLowerCase() !== 'default');
       const pick =
         nonDefault.find((g) => !isRegionalGenre(g)) ??
-        nonDefault.find((g) => sharedRegionalTokens.has(regionalTokens(g)[0] ?? '')) ??
+        nonDefault.find((g) => sharedRegionalTokens.has(mapToParentGenre(g) || g)) ??
         'pop';
       const query = buildGenreQuery(pick);
       // console.log(`[Tier 2] Search Fallback: ${query} (one request)`);
@@ -1312,7 +1363,9 @@ export async function buildMultiCollisionPlaylist(
           Math.min(SPOTIFY_SEARCH_LIMIT, remaining * 4),
           perQueryDiscoveryOffset(sessionSeed, 999),
         );
-        for (const t of refineDiscoveredTracks(found, trustedArtists)) {
+        const refined = refineDiscoveredTracks(found, trustedArtists);
+        await resolveMissingArtistGenres(refined);
+        for (const t of refined) {
           if (results.length >= targetLength) break;
           tryAddTrack(t, state, results, targetLength, trustedArtists);
         }
