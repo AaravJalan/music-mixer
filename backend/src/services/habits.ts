@@ -10,6 +10,7 @@ import { buildUserTasteProfile } from '../spotify/taste';
 import { getListeningTrends } from './db';
 import { getSessionUser } from './session';
 import { getGhostProfile, isGhostUserId, ghostGenresToStats } from './ghosts';
+import { mapToParentGenre } from '../spotify/genreMapper';
 import {
   ensureInitialListeningSnapshot,
   upgradeLegacyBaselineSnapshot,
@@ -42,7 +43,10 @@ function computeGenreDistribution(
     for (const artistId of track.artistIds) {
       for (const genre of artistGenreMap.get(artistId) ?? []) {
         const key = genre.trim().toLowerCase();
-        if (key && key !== 'default') genres.add(key);
+        if (key && key !== 'default') {
+          const parent = mapToParentGenre(key);
+          if (parent) genres.add(parent);
+        }
       }
     }
     for (const genre of genres) {

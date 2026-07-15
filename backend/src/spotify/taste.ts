@@ -323,7 +323,7 @@ async function doBuildUserTasteProfile(
     id: a.id,
     name: a.name,
     imageUrl: a.images?.[0]?.url ?? '',
-    genres: a.genres ?? [],
+    genres: (a.genres && a.genres.length > 0) ? a.genres : (artistGenreMap.get(a.id) ?? []),
   }));
 
   return {
