@@ -11,9 +11,9 @@ import {
   setCachedLastfmArtistGenres,
 } from '../lib/cache';
 import { inferGenresFromArtistName, inferGenresFromText } from './inference';
-import { fetchTrackTags, fetchArtistTags } from './lastfm';
-import { spotifyFetch } from './client';
-import { fetchTopTracks, resolveSpotifyTimeRange, type TopTrack } from './tracks';
+import { fetchTrackTags, fetchArtistTags } from '../spotify/lastfm';
+import { spotifyFetch } from '../spotify/client';
+import { fetchTopTracks, resolveSpotifyTimeRange, type TopTrack } from '../spotify/tracks';
 
 const PROFILE_CACHE_TTL = 5 * 60 * 1000;
 const profileCache = new Map<string, { at: number; promise: Promise<UserTasteProfile> }>();

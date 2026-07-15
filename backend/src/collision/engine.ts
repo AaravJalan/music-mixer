@@ -11,14 +11,14 @@ import { averagePairwiseSimilarity } from '../analytics/similarity';
 import { estimateListeningHoursFromTopTracks } from '../analytics/insights';
 import { findSharedTopArtists } from '../analytics/sharedArtists';
 import type { TopTrack } from '../spotify/tracks';
-import type { ProfileArtist } from '../spotify/taste';
-import { buildUserTasteProfile } from '../spotify/taste';
-import { computeMacroAdjustedSimilarity } from '../spotify/genreModel';
+import type { ProfileArtist } from '../engine/taste';
+import { buildUserTasteProfile } from '../engine/taste';
+import { computeMacroAdjustedSimilarity } from '../engine/genreModel';
 import {
   buildMultiCollisionPlaylist,
   resolveGenreHints,
   resolvePlaylistBuildTargets,
-} from '../spotify/build';
+} from '../engine/build';
 import { sharedGenresMulti } from '../analytics/genres';
 import { ghostGenresToStats, getGhostProfile, ghostToProfileArtists, isGhostUserId } from '../services/ghosts';
 import { getCachedTasteProfile, setCachedTasteProfile } from '../lib/cache';

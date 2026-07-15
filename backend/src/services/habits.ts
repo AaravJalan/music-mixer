@@ -6,7 +6,7 @@ import type {
 } from '@music-mixer/shared';
 import { measureListeningMsSince, type TopTrack } from '../spotify/tracks';
 import { estimateListeningHours } from '../analytics/insights';
-import { buildUserTasteProfile } from '../spotify/taste';
+import { buildUserTasteProfile } from '../engine/taste';
 import { getListeningTrends } from './db';
 import { getSessionUser } from './session';
 import { getGhostProfile, isGhostUserId, ghostGenresToStats } from './ghosts';

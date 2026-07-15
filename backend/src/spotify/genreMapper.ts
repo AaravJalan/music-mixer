@@ -8,7 +8,7 @@ export const PARENT_GENRES = [
   // Electronic Sub-genres
   { name: 'House', keywords: ['house'] },
   { name: 'Dubstep / Bass', keywords: ['dubstep', 'bass', 'riddim', 'brostep'] },
-  { name: 'Trance', keywords: ['trance'] },
+
   { name: 'Drum and Bass', keywords: ['drum and bass', 'dnb'] },
 
   // Hip Hop Sub-genres
@@ -22,7 +22,7 @@ export const PARENT_GENRES = [
 
   // --- BROAD CATCH-ALL BUCKETS (Must come last) ---
   { name: 'Bollywood', keywords: ['bollywood', 'desi', 'hindi', 'indian', 'filmi', 'india', 'punjabi', 'bhangra'] },
-  { name: 'Electronic', keywords: ['edm', 'electro', 'dance', 'hardstyle', 'techno'] },
+  { name: 'Electronic', keywords: ['edm', 'electro', 'dance', 'hardstyle', 'techno', 'trance'] },
   { name: 'Hip Hop', keywords: ['rap', 'hip hop', 'hip-hop', 'boom bap', 'grime', 'trap'] },
   { name: 'R&B', keywords: ['r&b', 'rnb', 'rhythm and blues'] },
   { name: 'Rock', keywords: ['rock', 'grunge', 'punk', 'emo', 'ska'] },

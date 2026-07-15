@@ -10,10 +10,12 @@ import type { AudioFeatureDimension } from '@music-mixer/shared';
 import { resolveAnchorGenre } from './genreModel';
 import { applyLinguisticVetoToPools } from './veto';
 import { normalizeArtistName } from '../analytics/sharedArtists';
-import { spotifyFetch, SpotifyApiError } from './client';
-import type { TopTrack } from './tracks';
-import { mapToParentGenre } from './genreMapper';
-import { fetchArtistTags } from './lastfm';
+import { spotifyFetch, SpotifyApiError } from '../spotify/client';
+import type { TopTrack } from '../spotify/tracks';
+import { mapToParentGenre } from '../spotify/genreMapper';
+import { fetchArtistTags, fetchSimilarTracks, fetchSimilarArtists, fetchTopTracksForTag } from '../spotify/lastfm';
+import { resolveLastfmToSpotify } from '../spotify/resolver';
+import { getCachedLastfmSimilarTracks, setCachedLastfmSimilarTracks, getCachedLastfmSimilarArtists, setCachedLastfmSimilarArtists, getCachedLastfmTagTracks, setCachedLastfmTagTracks } from '../lib/cache';
 
 /**
  * Deterministic Data Sanitization: implemented a deterministic deduplication pipeline
@@ -25,7 +27,7 @@ interface SpotifySearchResponse {
   tracks: { items: SpotifyTrackItem[] };
 }
 
-interface SpotifyTrackItem {
+export interface SpotifyTrackItem {
   id: string;
   name: string;
   duration_ms?: number;
@@ -1263,55 +1265,80 @@ export async function buildMultiCollisionPlaylist(
   void tier1Start;
   if (searched.length + results.length < targetLength) {
     if (effectiveMode === 'midpoint') {
-      if (!discoveryAvailable()) {
-        // console.log('[Tier 1] Midpoint Search Skipped: Circuit Breaker Active');
-      } else {
-        // Single centroid-genre query only (no loops). If it fails with 403/429, breaker trips
-        // inside searchTracks and we fall back to local/emergency tiers.
-        // Intersection-first query: shared genres only, with dampening to avoid dominant
-        // single-user genres (e.g. Bollywood) hijacking the midpoint intent.
-        const sharedGenres = sharedGenresForMidpointQuery(vetoedGenreStatPools, sharedRegionalTokens);
-        const centroidGenres = buildSearchGenres(input.centroidVector, input.genreHints);
-        const topGlobal = topNonRegionalGenresForQuery(vetoedGenreStatPools, 2);
+      if (discoveryAvailable()) {
+        const needsMoreTracks = () => searched.length + results.length < targetLength;
 
-        // Safe-Discovery Midpoint: up to 3 search calls max.
-        const querySeeds = uniqueOrdered([
-          ...sharedGenres,
-          ...topGlobal,
-          ...centroidGenres,
-          'pop',
-        ])
-          .filter((g) => g && String(g).trim().toLowerCase() !== 'default')
-          // Never search a regional genre unless it's shared-safe across ALL participants.
-          .filter((g) => isSharedSafeRegionalGenre(String(g), sharedRegionalTokens))
-          .slice(0, 3);
-
-        let searchCalls = 0;
-        for (const seed of querySeeds) {
-          if (searched.length + results.length >= targetLength) break;
-          if (!discoveryAvailable()) {
-            // console.log('[Tier 1] Midpoint Search Stopped: Circuit Breaker Active');
-            break;
+        // Phase A: Hyper-Targeted Discovery (Similar Tracks)
+        if (needsMoreTracks() && exactOverlap.length > 0) {
+          const topOverlap = exactOverlap.slice(0, 2);
+          for (const track of topOverlap) {
+            if (!needsMoreTracks()) break;
+            const artistName = track.artist.split(',')[0];
+            const trackName = track.name.split('(')[0].trim();
+            try {
+              let similarTracks = await getCachedLastfmSimilarTracks(artistName, trackName);
+              if (!similarTracks) {
+                similarTracks = await fetchSimilarTracks(artistName, trackName, 15);
+                await setCachedLastfmSimilarTracks(artistName, trackName, similarTracks);
+              }
+              const resolved = await resolveLastfmToSpotify(input.sessionId, similarTracks, 10);
+              const refined = refineDiscoveredTracks(resolved, trustedArtists);
+              await resolveMissingArtistGenres(refined);
+              for (const t of refined) {
+                if (!needsMoreTracks()) break;
+                tryAddTrackToBucket(t, searched);
+              }
+            } catch (err) {
+              console.warn(`[Phase A] Failed Last.fm track.getSimilar for ${trackName}`, err);
+            }
           }
-          const query = buildMultiGenreQuery([seed]);
-          searchCalls += 1;
-          // console.log(`[Tier 1] Midpoint Search: ${query} (${searchCalls}/3)`);
+        }
+
+        // Phase B: Expanding Shared Tastes (Similar Artists)
+        if (needsMoreTracks() && input.sharedArtists.length > 0) {
+          const topSharedArtist = input.sharedArtists[0];
           try {
-            const found = await searchTracks(
-              input.sessionId,
-              query,
-              Math.min(50, (targetLength - (results.length + searched.length)) * 8),
-              perQueryDiscoveryOffset(sessionSeed, 777 + searchCalls * 9),
-            );
-            const refined = refineDiscoveredTracks(found, trustedArtists);
+            let similarArtists = await getCachedLastfmSimilarArtists(topSharedArtist.name);
+            if (!similarArtists) {
+              similarArtists = await fetchSimilarArtists(topSharedArtist.name, 5);
+              await setCachedLastfmSimilarArtists(topSharedArtist.name, similarArtists);
+            }
+            if (similarArtists.length > 0) {
+              const query = similarArtists.map(a => `artist:"${a.name}"`).join(' OR ');
+              const found = await searchTracks(input.sessionId, query, 50, 0);
+              const refined = refineDiscoveredTracks(found, trustedArtists);
+              await resolveMissingArtistGenres(refined);
+              for (const t of refined) {
+                if (!needsMoreTracks()) break;
+                tryAddTrackToBucket(t, searched);
+              }
+            }
+          } catch (err) {
+            console.warn(`[Phase B] Failed Last.fm artist.getSimilar for ${topSharedArtist.name}`, err);
+          }
+        }
+
+        // Phase C: Curated Centroid Discovery (Top Tracks for Tag)
+        if (needsMoreTracks()) {
+          const centroidGenres = buildSearchGenres(input.centroidVector, input.genreHints);
+          const topGlobal = topNonRegionalGenresForQuery(vetoedGenreStatPools, 2);
+          const tagPick = centroidGenres[0] ?? topGlobal[0] ?? 'pop';
+
+          try {
+            let tagTracks = await getCachedLastfmTagTracks(tagPick);
+            if (!tagTracks) {
+              tagTracks = await fetchTopTracksForTag(tagPick, 25);
+              await setCachedLastfmTagTracks(tagPick, tagTracks);
+            }
+            const resolved = await resolveLastfmToSpotify(input.sessionId, tagTracks, 15);
+            const refined = refineDiscoveredTracks(resolved, trustedArtists);
             await resolveMissingArtistGenres(refined);
             for (const t of refined) {
-              if (searched.length + results.length >= targetLength) break;
+              if (!needsMoreTracks()) break;
               tryAddTrackToBucket(t, searched);
             }
-          } catch {
-            // searchTracks will trip breaker on 403/429; continue only if still available.
-            if (!discoveryAvailable()) break;
+          } catch (err) {
+            console.warn(`[Phase C] Failed Last.fm tag.getTopTracks for ${tagPick}`, err);
           }
         }
       }

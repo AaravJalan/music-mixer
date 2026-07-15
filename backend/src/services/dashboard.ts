@@ -11,7 +11,7 @@ import {
   findSonicOutlier,
 } from '../analytics/insights';
 import { getCachedDashboard, setCachedDashboard } from '../lib/cache';
-import { buildUserTasteProfile } from '../spotify/taste';
+import { buildUserTasteProfile } from '../engine/taste';
 
 const FEATURE_LABELS: Record<string, string> = {
   danceability: 'Danceability',

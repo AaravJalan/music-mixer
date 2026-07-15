@@ -17,9 +17,9 @@ import {
   computeWeightedTasteVector,
   resolveAnchorGenre,
   type WeightedGenre,
-} from '../spotify/genreModel';
-import { inferGenresFromText } from '../spotify/inference';
-import type { ProfileArtist } from '../spotify/taste';
+} from '../engine/genreModel';
+import { inferGenresFromText } from '../engine/inference';
+import type { ProfileArtist } from '../engine/taste';
 import type { TopTrack } from '../spotify/tracks';
 
 // --- Listening time estimates ------------------------------------------------

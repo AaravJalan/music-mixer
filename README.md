@@ -71,7 +71,7 @@ Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @m
 
 | Mode | ID | Behavior |
 |------|----|----------|
-| Midpoint Blend | `midpoint` | Up to 3 genre `/search` calls seeded from shared genres and centroid; searched tracks displayed first |
+| Midpoint Blend | `midpoint` | Uses Last.fm social scrobbles for discovery (Phase A: Similar Tracks, Phase B: Similar Artists, Phase C: Centroid Tag Top Tracks) resolved to playable Spotify IDs via batch `/search` |
 | Proportional Share | `equal_share` | Weighted interleave from each participant's own top tracks |
 | Common Songs Only | `common_only` | Strict track-ID intersection only |
 
@@ -99,6 +99,8 @@ Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @m
 - Narrative listening insights and sonic outlier detection
 - Estimated listening hours and play counts
 - **Listening Habits** — genre distribution plus cron-backed listening snapshots (DynamoDB, every 3 days)
+
+> **Note on Genre Percentages:** The Genre Cloud on the Dashboard calculates percentages using a raw tally of your **Top Tracks** (unweighted). In contrast, the Taste Collision profile calculates genre percentages by heavily rank-weighting your **Top Artists** first, then supplementing with tracks. This ensures the dashboard reflects pure listening volume, while the collision engine anchors on core musical identity.
 
 ### Friends & ghosts
 
@@ -139,8 +141,8 @@ Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @m
 
 - **ID-first matching** — track and artist intersections use Spotify entity IDs
 - **Genre-estimated vectors** — 6D taste vectors derived from weighted anchor-genre profiles
-- **Safe-Discovery** — capped `/search` calls per playlist build; circuit breaker on rate limits
-- **Cache-aside** — Redis caches dashboards, artist genres, and taste profiles; DynamoDB stores habit snapshots
+- **API Synergy** — Last.fm's social scrobble API (`track.getsimilar`, `artist.getsimilar`, `tag.gettoptracks`) powers high-quality discovery and genre tagging, while Spotify's API is strictly used for playback resolution (`/search`), audio metadata, and pulling top items.
+- **Cache-aside** — Redis caches dashboards, Last.fm similarity queries (7-day TTL), and taste profiles; DynamoDB stores habit snapshots
 - **Deterministic deduplication** — canonical keys collapse remix/version variants to one slot
 - **Cultural guardrails** — regional genres only included when shared-safe across all participants
 
@@ -177,12 +179,13 @@ music-mixer/
 │   │   ├── routes/               # 7 API routers
 │   │   ├── analytics/            # vectors, similarity, genres, insights
 │   │   ├── collision/            # engine, store, history
-│   │   ├── spotify/              # auth, client, tracks, taste, genreModel, inference, build, veto, export
+│   │   ├── engine/               # build, taste, genreModel, inference (Core Logic)
+│   │   ├── spotify/              # auth, client, tracks, lastfm, resolver (API Clients)
 │   │   ├── services/             # session, friends, ghosts, dashboard, habits
 │   │   ├── workers/              # SQS processor + 3-day habits cron
 │   │   ├── lambda.ts             # AWS Lambda entrypoint for Express
 │   │   └── local.ts              # Local Express development entrypoint
-│   └── scripts/                  # ghost hydration, API unlock, DB wipe
+│   └── scripts/                  # ghost seeding, API unlock, DB wipe
 └── frontend/src/
     ├── api/client.ts
     ├── components/               # collision, dashboard, layout, ui
@@ -629,11 +632,11 @@ Frontend: Vite SPA on Vercel; `/api/*` rewrites to the Lambda Function URL (`ver
 | Path | Responsibility |
 |------|----------------|
 | `collision/engine.ts` | Collision orchestration |
-| `spotify/build.ts` | Safe-Discovery playlist pipeline |
-| `spotify/taste.ts` | Taste profile builder |
-| `spotify/genreModel.ts` | Anchor genre vectors + macro penalty |
-| `spotify/inference.ts` | Lexical / known-artist genre fallback |
-| `spotify/veto.ts` | Regional genre veto |
+| `engine/build.ts` | Safe-Discovery playlist pipeline |
+| `engine/taste.ts` | Taste profile builder |
+| `engine/genreModel.ts` | Anchor genre vectors + macro penalty |
+| `engine/inference.ts` | Lexical / known-artist genre fallback |
+| `engine/veto.ts` | Regional genre veto |
 | `services/ghosts.ts` | Ghost persona reader |
 | `services/session.ts` | OAuth session management |
 | `analytics/insights.ts` | Listening estimates, outliers, dashboard narrative |

@@ -1,5 +1,5 @@
 import type { DashboardResponse, TasteTimeRange } from '@music-mixer/shared';
-import type { UserTasteProfile } from '../spotify/taste';
+import type { UserTasteProfile } from '../engine/taste';
 import { redis } from '../services/redis/client';
 
 // ─── TTLs (seconds) ──────────────────────────────────────────────────────────
@@ -8,6 +8,7 @@ const DASHBOARD_TTL = 24 * 60 * 60;           // 24 hours
 const TASTE_PROFILE_TTL = 3 * 60 * 60;        // 3 hours
 const LASTFM_TRACK_TTL  = 14 * 24 * 60 * 60; // 14 days
 const LASTFM_ARTIST_TTL = 30 * 24 * 60 * 60; // 30 days
+const LASTFM_SIMILAR_TTL = 7 * 24 * 60 * 60; // 7 days
 
 const DASHBOARD_CACHE_VERSION = 'v20';
 const TASTE_PROFILE_CACHE_VERSION = 'v6';
@@ -26,6 +27,12 @@ const lastfmTrackKey   = (artist: string, track: string) =>
   `genres:track:${slugify(artist)}:${slugify(track)}`;
 const lastfmArtistKey  = (artist: string) =>
   `genres:artist:${slugify(artist)}`;
+const lastfmSimilarTracksKey = (artist: string, track: string) =>
+  `lastfm:similar_tracks:${slugify(artist)}:${slugify(track)}`;
+const lastfmSimilarArtistsKey = (artist: string) =>
+  `lastfm:similar_artists:${slugify(artist)}`;
+const lastfmTagTracksKey = (tag: string) =>
+  `lastfm:tag_tracks:${slugify(tag)}`;
 
 // ─── Artist Genres Cache ──────────────────────────────────────────────────────
 
@@ -129,4 +136,36 @@ export async function getCachedLastfmArtistGenres(artist: string): Promise<strin
 
 export async function setCachedLastfmArtistGenres(artist: string, genres: string[]): Promise<void> {
   await redis.set(lastfmArtistKey(artist), JSON.stringify(genres), { ex: LASTFM_ARTIST_TTL });
+}
+
+// ─── Last.fm Similarity Cache (7 Days) ────────────────────────────────────────
+
+export async function getCachedLastfmSimilarTracks(artist: string, track: string): Promise<any[] | null> {
+  const raw = await redis.get<string>(lastfmSimilarTracksKey(artist, track));
+  if (!raw) return null;
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+}
+
+export async function setCachedLastfmSimilarTracks(artist: string, track: string, tracks: any[]): Promise<void> {
+  await redis.set(lastfmSimilarTracksKey(artist, track), JSON.stringify(tracks), { ex: LASTFM_SIMILAR_TTL });
+}
+
+export async function getCachedLastfmSimilarArtists(artist: string): Promise<any[] | null> {
+  const raw = await redis.get<string>(lastfmSimilarArtistsKey(artist));
+  if (!raw) return null;
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+}
+
+export async function setCachedLastfmSimilarArtists(artist: string, artists: any[]): Promise<void> {
+  await redis.set(lastfmSimilarArtistsKey(artist), JSON.stringify(artists), { ex: LASTFM_SIMILAR_TTL });
+}
+
+export async function getCachedLastfmTagTracks(tag: string): Promise<any[] | null> {
+  const raw = await redis.get<string>(lastfmTagTracksKey(tag));
+  if (!raw) return null;
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+}
+
+export async function setCachedLastfmTagTracks(tag: string, tracks: any[]): Promise<void> {
+  await redis.set(lastfmTagTracksKey(tag), JSON.stringify(tracks), { ex: LASTFM_SIMILAR_TTL });
 }

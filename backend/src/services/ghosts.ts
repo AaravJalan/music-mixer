@@ -1,5 +1,5 @@
 import type { GhostProfile, GenreStat } from '@music-mixer/shared';
-import type { ProfileArtist } from '../spotify/taste';
+import type { ProfileArtist } from '../engine/taste';
 import ghostProfilesData from '../mock/ghost-profiles.json';
 import { mapToParentGenre } from '../spotify/genreMapper';
 interface GhostDefinition {

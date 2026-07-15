@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { refreshAccessToken } from '../spotify/auth';
-import { buildUserTasteProfile } from '../spotify/taste';
+import { buildUserTasteProfile } from '../engine/taste';
 import { measureListeningMsSince } from '../spotify/tracks';
 import { redis } from './redis/client';
 import { getListeningTrends, getOldestListeningTrend, saveListeningHabitSnapshot, type TrendSnapshot } from './db';
