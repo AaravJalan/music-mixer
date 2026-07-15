@@ -158,6 +158,25 @@ export async function runMultiUserCollision(input: MultiCollisionInput): Promise
     15,
   );
 
+  // Strict Overlap Penalty: Just because vectors match doesn't mean it's a good Midpoint candidate.
+  // If they have 0 shared artists AND very low shared genre overlap (< 15%), penalize heavily.
+  if (participants.length >= 2 && sharedArtists.length === 0) {
+    let overlapSum = 0;
+    const maps = allGenreLists.map((gList) => new Map(gList.map(g => [g.genre, g.percentage])));
+    for (const genre of shared) {
+      overlapSum += Math.min(...maps.map(m => m.get(genre) ?? 0));
+    }
+    if (overlapSum < 15) {
+      let penalty = 0.65;
+      if (overlapSum > 12) penalty = 0.85;
+      else if (overlapSum > 5) penalty = 0.75;
+
+      // Soften the penalty based on tiers, but hard-cap at 0.79 
+      // to guarantee we drop out of Midpoint Blend (80% threshold).
+      similarityScore = Math.min(similarityScore * penalty, 0.79);
+    }
+  }
+
 
   const playlistTargets = resolvePlaylistBuildTargets(config);
   const playlistResult = await buildMultiCollisionPlaylist({
