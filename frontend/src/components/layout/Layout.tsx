@@ -28,7 +28,7 @@ export function Layout({ children, user, onLogout }: LayoutProps) {
         <main
           className={[
             'relative px-6 max-w-6xl mx-auto',
-            authenticated ? 'pt-14 pb-24 md:pt-8 md:pb-16' : 'pt-24 pb-16',
+            authenticated ? 'pt-20 pb-24 md:pt-8 md:pb-16' : 'pt-24 pb-16',
           ].join(' ')}
         >
           {children}

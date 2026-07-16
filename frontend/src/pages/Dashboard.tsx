@@ -117,20 +117,20 @@ export function Dashboard({ user }: DashboardProps) {
           <p className="text-white/50 mt-1">{user.displayName}</p>
         </div>
 
-        <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 flex-wrap">
+        <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 self-center sm:self-auto w-full sm:w-fit">
           {TERM_OPTIONS.map((t) => (
             <button
               key={t.value}
               type="button"
               onClick={() => handleTermChange(t.value)}
               className={[
-                'px-4 py-2 rounded-lg text-sm transition-all',
+                'flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm transition-all text-center',
                 term === t.value
                   ? 'bg-white/10 text-white font-medium'
                   : 'text-white/40 hover:text-white/80 hover:bg-white/5',
               ].join(' ')}
             >
-              Your {t.label.replace('the ', '')}
+              {t.label}
             </button>
           ))}
         </div>
@@ -174,7 +174,7 @@ export function Dashboard({ user }: DashboardProps) {
           {data && <StatBubbles data={data} periodLabel={activeTerm?.label ?? '6 months'} />}
 
           <div className="grid lg:grid-cols-2 gap-6">
-            <Card glow="purple">
+            <Card glow="purple" className="min-w-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Genre Cloud</h2>
                 <span className="text-xs text-white/35">{activeTerm?.label}</span>
@@ -182,8 +182,8 @@ export function Dashboard({ user }: DashboardProps) {
               <GenreCloud genres={data?.topGenres ?? []} />
             </Card>
 
-            <Card glow="purple">
-              <div className="flex items-center justify-between mb-2">
+            <Card glow="purple" className="px-2 sm:px-6 min-w-0">
+              <div className="flex items-center justify-between mb-2 px-4 sm:px-0">
                 <h2 className="text-lg font-semibold">6D Taste Shape</h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-purple/20 text-accent-purple">
                   {activeTerm?.label}
@@ -235,9 +235,9 @@ export function Dashboard({ user }: DashboardProps) {
           )}
 
           <div className="grid lg:grid-cols-2 gap-6">
-            <Card>
-              <h2 className="text-lg font-semibold mb-1">Your Artists</h2>
-              <p className="text-[11px] text-white/35 mb-4">Top {activeTerm?.label ?? '6 months'}</p>
+            <Card className="px-2 sm:px-6">
+              <h2 className="text-lg font-semibold mb-1 px-2 sm:px-0">Your Artists</h2>
+              <p className="text-[11px] text-white/35 mb-4 px-2 sm:px-0">Top {activeTerm?.label ?? '6 months'}</p>
               {termLoading && !data ? (
                 <div className="flex justify-center py-12">
                   <div className="w-6 h-6 border-2 border-accent-pink border-t-transparent rounded-full animate-spin" />
@@ -247,9 +247,9 @@ export function Dashboard({ user }: DashboardProps) {
               )}
             </Card>
 
-            <Card>
-              <h2 className="text-lg font-semibold mb-1">Your Tracks</h2>
-              <p className="text-[11px] text-white/35 mb-4">Most played · {activeTerm?.label ?? '6 months'}</p>
+            <Card className="px-2 sm:px-6">
+              <h2 className="text-lg font-semibold mb-1 px-2 sm:px-0">Your Tracks</h2>
+              <p className="text-[11px] text-white/35 mb-4 px-2 sm:px-0">Most played · {activeTerm?.label ?? '6 months'}</p>
               {termLoading && !data ? (
                 <div className="flex justify-center py-12">
                   <div className="w-6 h-6 border-2 border-accent-cyan border-t-transparent rounded-full animate-spin" />

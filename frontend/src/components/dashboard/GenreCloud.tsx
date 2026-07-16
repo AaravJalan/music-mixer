@@ -70,7 +70,8 @@ function packBubbles(genres: GenreStat[]): PackedBubble[] {
         const y = anchor.y + orbit * Math.sin(angle);
 
         if (!hasOverlap(x, y, item.r, placed)) {
-          const score = Math.hypot(x, y);
+          // Penalize horizontal distance heavily to force a narrow 3-column layout
+          const score = Math.hypot(x * 2.0, y);
           if (!best || score < best.score) {
             best = { x, y, score };
           }

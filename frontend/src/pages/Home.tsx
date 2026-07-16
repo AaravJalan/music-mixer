@@ -79,7 +79,11 @@ export function Home({ user }: HomeProps) {
   }
 
   async function copyInviteLink() {
-    const url = inviteUrl || (await api.createFriendInvite()).inviteUrl;
+    let url = inviteUrl;
+    if (!url) {
+      const { code } = await api.createFriendInvite();
+      url = `${window.location.origin}/friends/add/${code}`;
+    }
     await navigator.clipboard.writeText(url);
     setInviteUrl(url);
     setCopied(true);

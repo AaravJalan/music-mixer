@@ -58,7 +58,7 @@ export function PersonalRadar({
         </div>
       )}
 
-      <svg width={size} height={size} className="overflow-visible">
+      <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[280px] h-auto overflow-visible">
         {gridLevels.map((level) => (
           <polygon
             key={level}

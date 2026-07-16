@@ -7,6 +7,10 @@
     @apply border-white/10;
   }
 
+  html, body {
+    @apply overflow-x-hidden;
+  }
+
   body {
     @apply bg-surface text-white antialiased;
     font-family: 'Space Grotesk', system-ui, sans-serif;
