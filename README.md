@@ -1,10 +1,10 @@
 # MusicMixer
 
-**Spotify Taste Collision Engine:** a full-stack platform that maps upto four listeners into a six-dimensional taste space, scores multi-user compatibility, and builds shared playlists with cultural guardrails and rate-limit-safe Spotify discovery.
+**Spotify Taste Collision Engine:** a full-stack platform that maps up to 4 listeners into a six-dimensional taste space, scores multi-user compatibility, and builds shared playlists with cultural guardrails and rate-limit-safe Spotify discovery.
 
 ## Why it exists
 
-Spotify does not expose true “taste distance” or shared-playlist APIs for arbitrary friend groups. MusicMixer fills that gap: OAuth into Spotify, build ID-anchored taste profiles, collide up to four listeners (live users and/or ghost personas), and export a playlist back to Spotify.
+Spotify doesn't expose true “taste distance” or shared-playlist APIs for arbitrary friend groups. MusicMixer fills that gap: OAuth into Spotify, build ID-anchored taste profiles, collide up to four listeners (live users and/or ghost personas), and export a playlist back to Spotify.
 
 ## Quick start (local)
 
@@ -60,11 +60,11 @@ Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @m
 
 ### Taste collision
 
-- **Link collision** — create a session, share a URL, friend joins, run together
-- **Friend collision** — collide with a real friend or ghost persona
-- **Solo collision** — compare your own taste across two time ranges (e.g. all-time vs last 4 weeks)
-- **Sandbox** — authenticated user + 1–3 ghost personas, no second human required
-- **Replay / rerun** — past collisions saved to history with adjustable weights and settings
+- **Link Collision:** Create a session, share a URL, friend joins, run together
+- **Friend Collision:** Collide with a real friend or ghost persona
+- **Solo Collision:** Compare your own taste across two time ranges (e.g. all-time vs last 4 weeks)
+- **Sandbox:** Authenticated user + 1–3 ghost personas, no second human required
+- **Replay/Rerun:** Past collisions saved to history with adjustable weights and settings
 - Up to **4 participants** (live users and/or ghosts)
 
 ### Playlist generation modes
@@ -123,21 +123,21 @@ Deploy frontend: Vercel project with root `frontend`, build `npm run build -w @m
 └───────────────────────────────────┬─────────────────────────────────────┘
                                     │ REST + credentials
 ┌───────────────────────────────────▼─────────────────────────────────────┐
-│              Backend (Express → AWS Lambda via SST / serverless-http)     │
+│              Backend (Express → AWS Lambda via SST / serverless-http)   │
 │         Collision engine · Spotify clients · Analytics · Workers        │
-└───────────┬─────────────────────────────┬─────────────────────────────┘
+└───────────┬─────────────────────────────┬───────────────────────────────┘
             │                             │
 ┌───────────▼──────────┐      ┌───────────▼──────────────────────────────┐
 │  @music-mixer/shared │      │  DynamoDB + SQS + Upstash Redis          │
 │  Types · Constants   │      │  Sessions · History · Caches · Habits    │
-└──────────────────────┘      └────────────────────────────────────────────┘
+└──────────────────────┘      └──────────────────────────────────────────┘
                                           │
                               ┌───────────▼──────────────────────┐
                               │  Spotify Web API & Last.fm API   │
                               └──────────────────────────────────┘
 ```
 
-### Design principles
+### Design Principles
 
 - **ID-first matching** — track and artist intersections use Spotify entity IDs
 - **Genre-estimated vectors** — 6D taste vectors derived from weighted anchor-genre profiles
@@ -337,18 +337,6 @@ centeredA[i] = a[i] - 0.5
 similarity = (correlation + 1) / 2
 ```
 
-**Compatibility labels:**
-
-| Score | Label |
-|-------|-------|
-| ≥ 0.95 | Soulmates |
-| ≥ 0.85 | Perfect Harmony |
-| ≥ 0.75 | Great Match |
-| ≥ 0.60 | Solid Vibe |
-| ≥ 0.45 | Interesting Mix |
-| ≥ 0.30 | Opposites Attract |
-| < 0.30 | Chaotic Energy |
-
 ### Genre model (`spotify/genreModel.ts`)
 
 1. Each artist genre maps to an **anchor genre** (pop, rock, bollywood, k-pop, etc.)
@@ -416,7 +404,7 @@ Strict Spotify track-ID intersection across all participants. Matching tracks ma
 
 Returns intersection only. No discovery.
 
-### Tier 1 — Mode-dependent fill
+### Tier 1: Mode-dependent fill
 
 **Midpoint:**
 - Up to 3 `/search` calls
@@ -429,11 +417,11 @@ Returns intersection only. No discovery.
 - Tags `sourceParticipantIndex` for UI color dots
 - No API calls
 
-### Tier 2 — Search fallback (equal share only)
+### Tier 2: Search fallback (equal share only)
 
 One `/search` if Tier 1 local fill is still short. Midpoint skips Tier 2 (budget spent in Tier 1).
 
-### Tier 3 — Emergency baseline
+### Tier 3: Emergency baseline
 
 Rotates through all participants' local top tracks to reach target length. Midpoint prefers non-regional tracks first.
 
@@ -468,8 +456,8 @@ On 403/429 from Spotify, discovery calls short-circuit for a cooldown period. Co
                     buildMultiCollisionPlaylist
                               │
                     ┌─────────▼─────────┐
-                    │ Stage 1: Common    │
-                    │ (ID intersection)  │
+                    │ Stage 1: Common   │
+                    │ (ID intersection) │
                     └─────────┬─────────┘
                               │
               ┌───────────────┼───────────────┐
@@ -538,14 +526,6 @@ Home → create collision → WaitingRoom → CollisionSettings → Run → Resu
 ---
 
 ## Ghost personas
-
-| ID | Name | Tagline |
-|----|------|---------|
-| `ghost-thrasher` | The Thrasher | Heavy Metal |
-| `ghost-hype-beast` | The Hype Beast | US Hip-Hop |
-| `ghost-study-buddy` | The Study Buddy | Lo-Fi Ambient |
-| `ghost-pop-princess` | The Pop Princess | Dance Pop |
-| `ghost-bollywood-buff` | The Bollywood Buff | Filmi & Desi Pop |
 
 Track data lives in `backend/src/mock/ghost-profiles.json`, updated via:
 
