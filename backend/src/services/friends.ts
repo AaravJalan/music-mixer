@@ -3,66 +3,96 @@ import { v4 as uuidv4 } from 'uuid';
 import { env } from '../config/env';
 import { ghostToUserProfile, isGhostUserId, listGhostProfiles } from './ghosts';
 
+import { PutCommand, QueryCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { docClient, getFriendsTableName } from './db';
+import { redis } from './redis/client';
+
 interface FriendInvite {
   fromUserId: string;
   fromUser: UserProfile;
   createdAt: number;
 }
 
-const friends = new Map<string, Set<string>>();
-const friendInvites = new Map<string, FriendInvite>();
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const INVITE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
-function ensureFriendSet(userId: string): Set<string> {
-  let set = friends.get(userId);
-  if (!set) {
-    set = new Set();
-    friends.set(userId, set);
-  }
-  return set;
-}
+const inviteKey = (code: string) => `friend_invite:${code}`;
 
-export function createFriendInvite(fromUser: UserProfile): { code: string; inviteUrl: string } {
+export async function createFriendInvite(fromUser: UserProfile): Promise<{ code: string; inviteUrl: string }> {
   const code = uuidv4().slice(0, 8);
-  friendInvites.set(code, {
+  const invite: FriendInvite = {
     fromUserId: fromUser.id,
     fromUser,
     createdAt: Date.now(),
-  });
+  };
+  await redis.set(inviteKey(code), JSON.stringify(invite), { ex: INVITE_TTL_SECONDS });
   return {
     code,
     inviteUrl: `${env.frontendUrl}/friends/add/${code}`,
   };
 }
 
-export function acceptFriendInvite(code: string, user: UserProfile): UserProfile | null {
-  const invite = friendInvites.get(code);
-  if (!invite) return null;
-  if (Date.now() - invite.createdAt > INVITE_TTL_MS) {
-    friendInvites.delete(code);
+export async function acceptFriendInvite(code: string, user: UserProfile): Promise<UserProfile | null> {
+  const raw = await redis.getdel<string>(inviteKey(code));
+  if (!raw) return null;
+  let invite: FriendInvite;
+  try {
+    invite = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
     return null;
   }
+  
   if (invite.fromUserId === user.id) return null;
 
-  ensureFriendSet(invite.fromUserId).add(user.id);
-  ensureFriendSet(user.id).add(invite.fromUserId);
-  friendInvites.delete(code);
+  const now = new Date().toISOString();
+  await Promise.all([
+    docClient.send(new PutCommand({
+      TableName: getFriendsTableName(),
+      Item: { userId: invite.fromUserId, friendId: user.id, addedAt: now },
+    })),
+    docClient.send(new PutCommand({
+      TableName: getFriendsTableName(),
+      Item: { userId: user.id, friendId: invite.fromUserId, addedAt: now },
+    })),
+  ]);
+  
   return invite.fromUser;
 }
 
-export function getFriends(userId: string): { userId: string; addedAt: string }[] {
-  const set = friends.get(userId);
-  if (!set) return [];
-  return [...set].map((id) => ({ userId: id, addedAt: new Date().toISOString() }));
+export async function getFriends(userId: string): Promise<{ userId: string; addedAt: string }[]> {
+  const result = await docClient.send(
+    new QueryCommand({
+      TableName: getFriendsTableName(),
+      KeyConditionExpression: 'userId = :uid',
+      ExpressionAttributeValues: { ':uid': userId },
+    })
+  );
+  return (result.Items ?? []).map(item => ({
+    userId: item.friendId,
+    addedAt: item.addedAt || new Date().toISOString(),
+  }));
 }
 
-export function areFriends(userA: string, userB: string): boolean {
-  return friends.get(userA)?.has(userB) ?? false;
+export async function areFriends(userA: string, userB: string): Promise<boolean> {
+  const result = await docClient.send(
+    new GetCommand({
+      TableName: getFriendsTableName(),
+      Key: { userId: userA, friendId: userB },
+    })
+  );
+  return !!result.Item;
 }
 
-export function removeFriend(userId: string, friendId: string): void {
-  friends.get(userId)?.delete(friendId);
-  friends.get(friendId)?.delete(userId);
+export async function removeFriend(userId: string, friendId: string): Promise<void> {
+  await Promise.all([
+    docClient.send(new DeleteCommand({
+      TableName: getFriendsTableName(),
+      Key: { userId, friendId },
+    })),
+    docClient.send(new DeleteCommand({
+      TableName: getFriendsTableName(),
+      Key: { userId: friendId, friendId: userId },
+    })),
+  ]);
 }
 
 export async function getDefaultGhostFriends(): Promise<Friend[]> {

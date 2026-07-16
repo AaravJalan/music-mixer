@@ -541,8 +541,8 @@ npm run generate:ghosts -w backend
 
 | Store | Purpose |
 |------|----------|
-| **Upstash Redis** | Active sessions, OAuth states, refresh tokens, cached user profiles |
-| **AWS DynamoDB** | `ListeningHabits` table for daily snapshots + SQS for non-blocking writes |
+| **Upstash Redis** | Active sessions, OAuth states, refresh tokens, cached user profiles, 7-day friend invite links |
+| **AWS DynamoDB** | `ListeningHabits` table for daily snapshots, `Friends` table for permanent relationships + SQS for non-blocking writes |
 | **Memory** | Active collisions, rate limiter buckets, discovery cache |
 
 

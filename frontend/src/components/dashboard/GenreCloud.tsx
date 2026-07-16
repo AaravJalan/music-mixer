@@ -70,8 +70,8 @@ function packBubbles(genres: GenreStat[]): PackedBubble[] {
         const y = anchor.y + orbit * Math.sin(angle);
 
         if (!hasOverlap(x, y, item.r, placed)) {
-          // Penalize horizontal distance heavily to force a narrow 3-column layout
-          const score = Math.hypot(x * 2.0, y);
+          // Standard circular packing algorithm
+          const score = Math.hypot(x, y);
           if (!best || score < best.score) {
             best = { x, y, score };
           }
@@ -140,7 +140,7 @@ export function GenreCloud({ genres }: GenreCloudProps) {
   return (
     <div
       ref={containerRef}
-      className="w-full min-h-[300px] sm:min-h-[340px] flex items-center justify-center py-1"
+      className="w-full aspect-square sm:aspect-square flex items-center justify-center py-1 max-h-[500px]"
     >
       <div
         className="relative shrink-0"

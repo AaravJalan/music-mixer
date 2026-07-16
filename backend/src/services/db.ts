@@ -2,7 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+export const docClient = DynamoDBDocumentClient.from(client);
 
 export interface TrendSnapshot {
   userId: string;
@@ -40,6 +40,24 @@ function getTableName(): string {
   throw new Error(
     'ListeningHabits DynamoDB table is not configured. ' +
       'Set LISTENING_HABITS_TABLE in .env (local) or link the table in sst.config.ts (Lambda).',
+  );
+}
+
+export function getFriendsTableName(): string {
+  if (process.env.FRIENDS_TABLE) {
+    return process.env.FRIENDS_TABLE;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Resource } = require('sst') as { Resource: Record<string, { name?: string }> };
+    const name = Resource.Friends?.name;
+    if (name) return name;
+  } catch {}
+
+  throw new Error(
+    'Friends DynamoDB table is not configured. ' +
+      'Set FRIENDS_TABLE in .env (local) or link the table in sst.config.ts (Lambda).',
   );
 }
 

@@ -18,14 +18,23 @@ export default $config({
       primaryIndex: { hashKey: "userId", rangeKey: "date" },
     });
 
-    // 2. Define an SQS Queue for non-blocking real-time writes
+    // 2. Define the DynamoDB table for Friends (Permanent Relationships)
+    const friendsTable = new sst.aws.Dynamo("Friends", {
+      fields: {
+        userId: "string",
+        friendId: "string",
+      },
+      primaryIndex: { hashKey: "userId", rangeKey: "friendId" },
+    });
+
+    // 3. Define an SQS Queue for non-blocking real-time writes
     const habitsQueue = new sst.aws.Queue("HabitsQueue");
 
-    // 3. Define the main Express API Lambda
+    // 4. Define the main Express API Lambda
     const backendApi = new sst.aws.Function("MusicMixerBackend", {
       url: true, // Generate a public API endpoint
       handler: "backend/dist/lambda.handler",
-      link: [listeningHabitsTable, habitsQueue],
+      link: [listeningHabitsTable, friendsTable, habitsQueue],
       environment: {
         UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL || "",
         UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN || "",
@@ -34,11 +43,12 @@ export default $config({
         SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || "",
         SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || "",
         LISTENING_HABITS_TABLE: listeningHabitsTable.name,
+        FRIENDS_TABLE: friendsTable.name,
         LASTFM_API_KEY: process.env.LASTFM_API_KEY || "",
       },
     });
 
-    // 4. Attach a background worker Lambda to process SQS events asynchronously
+    // 5. Attach a background worker Lambda to process SQS events asynchronously
     habitsQueue.subscribe({
       handler: "backend/src/workers/queueProcessor.handler",
       link: [listeningHabitsTable],
@@ -47,7 +57,7 @@ export default $config({
       },
     });
 
-    // 5. Define a Cron Job to fetch and store trends every 1 day
+    // 6. Define a Cron Job to fetch and store trends every 1 day
     new sst.aws.Cron("TrendHabitsSnapshot", {
       schedule: "rate(1 day)", // Run every 1 day
       job: {

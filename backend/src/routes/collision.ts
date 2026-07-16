@@ -51,7 +51,7 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
     participantTimeRanges?: import('@music-mixer/shared').TasteTimeRange[];
   };
 
-  if (body.friendId && !isGhostUserId(body.friendId) && !areFriends(authReq.user.id, body.friendId)) {
+  if (body.friendId && !isGhostUserId(body.friendId) && !(await areFriends(authReq.user.id, body.friendId))) {
     res.status(400).json({ error: 'User is not in your friends list' });
     return;
   }

@@ -6,6 +6,10 @@
 
 declare module "sst" {
   export interface Resource {
+    "Friends": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
     "HabitsQueue": {
       "type": "sst.aws.Queue"
       "url": string
