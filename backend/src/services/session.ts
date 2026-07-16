@@ -133,3 +133,23 @@ export async function getValidAccessToken(sessionId: string): Promise<string | n
     return null;
   }
 }
+
+export async function createOfflineSession(userId: string): Promise<string | null> {
+  const refreshToken = await getStoredRefreshToken(userId);
+  if (!refreshToken) return null;
+  
+  const user = await getCachedProfile(userId);
+  if (!user) return null;
+  
+  try {
+    const tokens = await refreshAccessToken(refreshToken);
+    return createSession(user, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token ?? refreshToken,
+      expiresIn: tokens.expires_in,
+    });
+  } catch (err) {
+    console.error(`Offline session creation failed for user ${userId}:`, err);
+    return null;
+  }
+}

@@ -30,6 +30,7 @@ import { recordRecommendationLatency, getMetricsSnapshot } from '../middleware/t
 import { env } from '../config/env';
 import { areFriends } from '../services/friends';
 import { getGhostProfile, ghostToUserProfile, isGhostUserId } from '../services/ghosts';
+import { getCachedProfile, createOfflineSession } from '../services/session';
 
 const router = Router();
 
@@ -80,6 +81,30 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
       config,
     );
     res.json({ collision });
+    return;
+  }
+
+  if (body.friendId && !isGhostUserId(body.friendId)) {
+    const friendSessionId = await createOfflineSession(body.friendId);
+    if (!friendSessionId) {
+      res.status(400).json({ error: 'Could not access friend Spotify data' });
+      return;
+    }
+    const friendProfile = await getCachedProfile(body.friendId);
+    if (!friendProfile) {
+      res.status(400).json({ error: 'Could not fetch friend profile' });
+      return;
+    }
+
+    const collision = await createCollision(authReq.user, authReq.sessionId, env.frontendUrl, {
+      mode: 'friend',
+      friendId: body.friendId,
+      config,
+    });
+    
+    // Auto-join the friend!
+    const joinedSession = await joinCollision(collision.id, friendProfile, friendSessionId);
+    res.json({ collision: joinedSession });
     return;
   }
 

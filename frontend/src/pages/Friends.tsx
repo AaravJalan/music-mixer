@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import type { Friend, UserProfile } from '@music-mixer/shared';
 import { api } from '../api/client';
 import { Card } from '../components/ui/Card';
@@ -11,11 +12,13 @@ interface FriendsPageProps {
 }
 
 export function FriendsPage({ user }: FriendsPageProps) {
+  const navigate = useNavigate();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pending, setPending] = useState<import('@music-mixer/shared').CollisionSession[]>([]);
   const [inviteUrl, setInviteUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     api.getFriends()
@@ -25,6 +28,28 @@ export function FriendsPage({ user }: FriendsPageProps) {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleCollide(friendId: string) {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const { collision } = await api.createCollision({ mode: 'friend', friendId });
+      navigate(`/collision/${collision.id}`);
+    } catch (err) {
+      console.error(err);
+      setCreating(false);
+    }
+  }
+
+  async function handleRemoveFriend(friendId: string) {
+    if (!confirm('Are you sure you want to remove this friend?')) return;
+    try {
+      await api.removeFriend(friendId);
+      setFriends(friends.filter((f) => f.user.id !== friendId));
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   async function handleCopy() {
     let url = inviteUrl;
@@ -89,9 +114,24 @@ export function FriendsPage({ user }: FriendsPageProps) {
         ) : (
           <div className="space-y-2">
             {realFriends.map((f) => (
-              <div key={f.user.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5">
-                <Avatar user={f.user} size="sm" />
-                <span className="text-sm">{f.user.displayName}</span>
+              <div key={f.user.id} className="group flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
+                <button 
+                  type="button" 
+                  onClick={() => handleCollide(f.user.id)}
+                  disabled={creating}
+                  className="flex items-center gap-3 flex-1 text-left"
+                >
+                  <Avatar user={f.user} size="sm" />
+                  <span className="text-sm font-medium">{f.user.displayName}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFriend(f.user.id)}
+                  title="Remove friend"
+                  className="opacity-0 group-hover:opacity-100 p-2 text-white/40 hover:text-red-400 hover:bg-white/10 rounded-md transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
               </div>
             ))}
           </div>

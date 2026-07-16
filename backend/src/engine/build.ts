@@ -973,7 +973,7 @@ async function searchTracks(
   if (!discoveryAvailable()) return [];
   // Spotify allows up to 50 results per search call; Safe-Discovery uses few calls,
   // so we maximize per-call yield to reduce 429 risk.
-  const capped = Math.min(limit, 50);
+  const capped = Math.max(1, Math.min(limit, 50));
   const clampedOffset = Math.min(Math.max(0, offset), DISCOVERY_OFFSET_MAX);
   const cacheKey = `search:${query}:${capped}:${clampedOffset}`;
   try {
