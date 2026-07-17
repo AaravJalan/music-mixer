@@ -129,7 +129,6 @@ async function doMeasureListeningMsSince(
     for (let page = 0; page < 8; page++) {
       const params: Record<string, string> = {
         limit: '50',
-        after: String(sinceMs),
       };
       if (before) params.before = before;
 
@@ -199,7 +198,6 @@ async function doFetchYearToDateTracks(sessionId: string): Promise<TopTrack[]> {
     for (let page = 0; page < 12; page++) {
       const params: Record<string, string> = {
         limit: '50',
-        after: String(after),
       };
       if (before) params.before = before;
 
