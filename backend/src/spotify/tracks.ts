@@ -158,7 +158,7 @@ async function doMeasureListeningMsSince(
       const oldestTime = new Date(oldest.played_at).getTime();
       if (oldestTime <= sinceMs) break;
 
-      const nextBefore = data.cursors?.before ?? oldest.played_at;
+      const nextBefore = data.cursors?.before ?? String(new Date(oldest.played_at).getTime());
       if (nextBefore === before) break;
       before = nextBefore;
 
@@ -230,7 +230,7 @@ async function doFetchYearToDateTracks(sessionId: string): Promise<TopTrack[]> {
       const oldestTime = new Date(oldest.played_at).getTime();
       if (oldestTime <= after) break;
 
-      const nextBefore = data.cursors?.before ?? oldest.played_at;
+      const nextBefore = data.cursors?.before ?? String(new Date(oldest.played_at).getTime());
       if (nextBefore === before) break;
       before = nextBefore;
 
