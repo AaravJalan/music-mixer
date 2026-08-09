@@ -34,7 +34,7 @@ export const PLAYLIST_MATCH_THRESHOLD = 0.8;
 export interface CollisionConfig {
   /** Per-participant influence weights (up to 4). */
   participantWeights: number[];
-  /** Spotify time range per participant (4 weeks, 6 months, this year, all time). */
+  /** Spotify time range per participant (4 weeks, 6 months, all time). */
   participantTimeRanges: import('./api').TasteTimeRange[];
   playlistLength: number;
   playlistLengthMode: PlaylistLengthMode;
