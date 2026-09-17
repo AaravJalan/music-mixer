@@ -119,7 +119,7 @@ export function WaitingRoom({
           type="button"
           onClick={onRun}
           disabled={running}
-          className="px-8 py-4 rounded-full bg-gradient-to-r from-accent-pink via-accent-purple to-accent-cyan text-white font-semibold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 shadow-lg shadow-accent-purple/30"
+          className="px-8 py-4 rounded-full bg-gradient-primary-glow text-white font-semibold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 shadow-lg shadow-accent-purple/30"
         >
           {running ? 'Colliding tastes...' : 'Collide tastes'}
         </motion.button>

@@ -10,7 +10,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'primary', size = 'md', loading, className = '', children, disabled, ...props }, ref) => {
     const base = 'inline-flex items-center justify-center font-medium rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-purple/50 disabled:opacity-50 disabled:cursor-not-allowed';
     const variants = {
-      primary: 'bg-gradient-to-r from-accent-pink to-accent-purple hover:opacity-90 text-white shadow-lg shadow-accent-pink/20',
+      primary: 'bg-gradient-primary hover:opacity-90 text-white shadow-lg shadow-accent-pink/20',
       secondary: 'glass hover:bg-white/10 text-white',
       ghost: 'hover:bg-white/5 text-white/70 hover:text-white',
       spotify: 'bg-accent-green hover:bg-accent-green/90 text-black font-semibold',

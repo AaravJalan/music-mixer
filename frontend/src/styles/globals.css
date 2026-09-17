@@ -8,7 +8,8 @@
   }
 
   html, body {
-    @apply overflow-x-hidden;
+    overflow-x: clip;
+    overscroll-behavior: none;
   }
 
   body {
@@ -19,7 +20,36 @@
 
 @layer utilities {
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-pink via-accent-purple to-accent-cyan;
+    background-image: linear-gradient(to right, #ff2d6a, #8b5cf6, #22d3ee);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    padding-bottom: 0.05em; /* prevent descender clipping */
+  }
+
+  .bg-mesh {
+    background-image: linear-gradient(135deg, #12121a 0%, #22123a 50%, #121e33 100%);
+  }
+
+  .text-accent-pink {
+    color: #ff2d6a;
+  }
+
+  .bg-accent-pink\/20 {
+    background-color: rgba(255, 45, 106, 0.2);
+  }
+
+  .bg-gradient-primary {
+    background-image: linear-gradient(to right, #ff2d6a, #8b5cf6);
+  }
+
+  .bg-gradient-primary-glow {
+    background-image: linear-gradient(to right, #ff2d6a, #8b5cf6, #22d3ee);
+  }
+
+  .bg-gradient-habit {
+    background-image: linear-gradient(to right, rgba(255, 45, 106, 0.1), rgba(139, 92, 246, 0.1), rgba(34, 211, 238, 0.1));
   }
 
   .glass {

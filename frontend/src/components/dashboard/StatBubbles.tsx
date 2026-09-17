@@ -15,17 +15,17 @@ interface Bubble {
   label: string;
   value: string;
   unit?: string;
-  glow: string;
+  glow: [string, string];
 }
 
 export function StatBubbles({ data, periodLabel }: StatBubblesProps) {
   const bubbles: Bubble[] = [
-    { label: 'Tracks analyzed', value: formatCount(data.totalTracks ?? 0), glow: 'from-accent-cyan/25 to-accent-cyan/5' },
-    { label: 'Artists analyzed', value: formatCount(data.totalArtists ?? 0), glow: 'from-accent-pink/25 to-accent-pink/5' },
-    { label: 'Top genre', value: data.insights.topGenre?.name ?? 'Mixed', glow: 'from-accent-purple/25 to-accent-purple/5' },
-    { label: 'Niche factor', value: `${Math.round((data.insights.nicheScore ?? 0) * 100)}`, unit: '%', glow: 'from-accent-pink/25 to-accent-purple/5' },
-    { label: 'Unique genres', value: formatCount(data.uniqueGenreCount ?? 0), glow: 'from-accent-purple/25 to-accent-pink/5' },
-    { label: 'Avg song length', value: (data.avgTrackLengthMin ?? 0).toFixed(1), unit: 'min', glow: 'from-accent-cyan/25 to-accent-purple/5' },
+    { label: 'Tracks analyzed', value: formatCount(data.totalTracks ?? 0), glow: ['rgba(34, 211, 238, 0.25)', 'rgba(34, 211, 238, 0.05)'] },
+    { label: 'Artists analyzed', value: formatCount(data.totalArtists ?? 0), glow: ['rgba(255, 45, 106, 0.25)', 'rgba(255, 45, 106, 0.05)'] },
+    { label: 'Top genre', value: data.insights.topGenre?.name ?? 'Mixed', glow: ['rgba(139, 92, 246, 0.25)', 'rgba(139, 92, 246, 0.05)'] },
+    { label: 'Niche factor', value: `${Math.round((data.insights.nicheScore ?? 0) * 100)}`, unit: '%', glow: ['rgba(255, 45, 106, 0.25)', 'rgba(139, 92, 246, 0.05)'] },
+    { label: 'Unique genres', value: formatCount(data.uniqueGenreCount ?? 0), glow: ['rgba(139, 92, 246, 0.25)', 'rgba(255, 45, 106, 0.05)'] },
+    { label: 'Avg song length', value: (data.avgTrackLengthMin ?? 0).toFixed(1), unit: 'min', glow: ['rgba(34, 211, 238, 0.25)', 'rgba(139, 92, 246, 0.05)'] },
   ];
 
   return (
@@ -41,7 +41,8 @@ export function StatBubbles({ data, periodLabel }: StatBubblesProps) {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.04 }}
-            className={`relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${bubble.glow} p-4 flex flex-col justify-between min-h-[92px]`}
+            className={`relative overflow-hidden rounded-2xl border border-white/10 p-4 flex flex-col justify-between min-h-[92px]`}
+            style={{ backgroundImage: `linear-gradient(to bottom right, ${bubble.glow[0]}, ${bubble.glow[1]})` }}
           >
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold text-white leading-none">{bubble.value}</span>

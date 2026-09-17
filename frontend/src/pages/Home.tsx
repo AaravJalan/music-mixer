@@ -258,7 +258,7 @@ export function Home({ user }: HomeProps) {
         <p className="text-xs text-white/40 mb-4">
           Compare your recent listening against your longer-term taste.
         </p>
-        <Button variant="ghost" size="sm" onClick={startSoloCollision} loading={creating}>
+        <Button variant="primary" size="sm" onClick={startSoloCollision} loading={creating}>
           Run solo collision
         </Button>
       </Card>

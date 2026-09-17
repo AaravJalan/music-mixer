@@ -161,7 +161,7 @@ export function Dashboard({ user }: DashboardProps) {
           className="space-y-6"
         >
           {data && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-accent-pink/10 via-accent-purple/10 to-accent-cyan/10 border border-white/10">
+            <div className="p-4 rounded-2xl bg-gradient-habit border border-white/10">
               <p className="text-lg font-semibold text-gradient">{data.insights.headline}</p>
               <p className="text-xs text-white/40 mt-1">
                 {data.insights.listeningStyle === 'focused' ? 'Focused listener' : 'Genre explorer'}
