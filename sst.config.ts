@@ -27,14 +27,11 @@ export default $config({
       primaryIndex: { hashKey: "userId", rangeKey: "friendId" },
     });
 
-    // 3. Define an SQS Queue for non-blocking real-time writes
-    const habitsQueue = new sst.aws.Queue("HabitsQueue");
-
-    // 4. Define the main Express API Lambda
+    // 3. Define the main Express API Lambda
     const backendApi = new sst.aws.Function("MusicMixerBackend", {
       url: true, // Generate a public API endpoint
       handler: "backend/dist/lambda.handler",
-      link: [listeningHabitsTable, friendsTable, habitsQueue],
+      link: [listeningHabitsTable, friendsTable],
       environment: {
         UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL || "",
         UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN || "",
@@ -48,16 +45,7 @@ export default $config({
       },
     });
 
-    // 5. Attach a background worker Lambda to process SQS events asynchronously
-    habitsQueue.subscribe({
-      handler: "backend/src/workers/queueProcessor.handler",
-      link: [listeningHabitsTable],
-      environment: {
-        LISTENING_HABITS_TABLE: listeningHabitsTable.name,
-      },
-    });
-
-    // 6. Define a Cron Job to fetch and store trends every 1 day
+    // 4. Define a Cron Job to fetch and store trends every 1 day
     new sst.aws.Cron("TrendHabitsSnapshot", {
       schedule: "rate(1 day)", // Run every 1 day
       job: {
